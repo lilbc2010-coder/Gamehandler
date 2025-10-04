@@ -1,0 +1,4687 @@
+local rep = game.ReplicatedStorage
+local work = game.Workspace
+local light = game.Lighting
+local serv = game.ServerStorage
+local gameId = game.PlaceId
+local fl2Id = rep.FL2_ID.Value
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local DataService =  game:GetService('DataStoreService')
+local PhysicsService = game:GetService("PhysicsService")
+local MarketService = game:GetService("MarketplaceService")
+local BadgeService = game:GetService("BadgeService")
+local InsertService = game:GetService("InsertService")
+local PlayerService = game:GetService("Players")
+local Chat = game:GetService("Chat")
+local dataId, purchaseId, lastReset = "ATF7-1.3", "ATF7-PurchaseHistory", "6/12/19-3"
+if gameId == fl2Id then
+	dataId, purchaseId, lastReset = "FL2-1.0", "FL2-PurchaseHistory", "11/9/19-1"
+	serv.FL2_Morphs.Name = "Morphs"
+	serv.FL2_Tools.Name = "Tools"
+	serv.FL2_Shirts.Name = "Shirts"
+	serv.FL2_Pants.Name = "Pants"
+	serv.FL2_Vehicles.Name = "Vehicles"
+	serv.FL2_Radio.Name = "Radio"
+	serv.FL2_Throwables.Name = "Throwables"
+	rep.GROUP_ID.Value = 3745272
+	rep.FL2_ExclusiveItemNames.Name = "ExclusiveItemNames"
+	rep.FL2_Props.Name = "Props"
+	rep.FL2_ExpansionPacks.Name = "ExpansionPacks"
+else
+	serv.ATF7_Morphs.Name = "Morphs"
+	serv.ATF7_Tools.Name = "Tools"
+	serv.ATF7_Shirts.Name = "Shirts"
+	serv.ATF7_Pants.Name = "Pants"
+	serv.ATF7_Vehicles.Name = "Vehicles"
+	serv.ATF7_Radio.Name = "Radio"
+	serv.ATF7_Throwables.Name = "Throwables"
+	rep.ATF7_ExclusiveItemNames.Name = "ExclusiveItemNames"
+	rep.ATF7_Props.Name = "Props"
+	rep.ATF7_ExpansionPacks.Name = "ExpansionPacks"
+end
+local groupId = rep.GROUP_ID.Value
+local DataStore = DataService:GetDataStore(dataId)
+local PurchaseStore = DataService:GetDataStore(purchaseId)
+
+local weatherSettings = rep.GlobalWeather
+local teleportingIndex = {}
+local teleporterIndex = {}
+local plrStatus = {}
+local gameData = {}
+local rayIgnoreList = {}
+local lampPosts = {}
+local mineWalls = {}
+local dummyList = {}
+local omniToolProcess = {
+	Time = true,
+	Weather = true
+}
+local PWL, BWL = 0.4, 0.45 --Poor Weather Limit, Bad Weather Limit
+local hourMorningBegin, hourMorningEnd, hourTwilightBegin, hourTwilightEnd = 5, 8, 17, 20
+local daySpeed, nightSpeed = 100, 140
+local timeSpeed = daySpeed
+local weather = 0
+local weatherCounter = math.random(0, 1000) / 100
+local uWeather, uCurrentWeather = 0, "Clear"
+local currentWeather = "Clear"
+local weatherProbabilities = {{"Stormfront", 24}, {"Sandstorm", 8}--[[, {"Tornado", 2}]]}
+local cloudPathways = {Cloudy = 6, Rainy = 8, Stormy = 16, Lightning = 4}
+local lastLightningBolt, timeBetweenLightningBolts = tick(), 1
+local weatherTable, cloudPathTable = {}, {}
+local chadBadge = 2124442548
+if gameId == fl2Id then
+	weatherProbabilities[2][2] = 0
+	clouds = serv.FL2_Clouds
+	clouds.Name = "Clouds"
+	clouds.Parent = work
+	chadBadge = 2124494498
+else
+	clouds = serv.ATF7_Clouds
+	clouds.Name = "Clouds"
+	clouds.Parent = work
+end
+local clouds = work.Clouds:GetChildren()
+for _,v in pairs(weatherProbabilities) do
+	for i = 1, v[2] do
+		weatherTable[#weatherTable + 1] = v[1]
+	end
+end
+for i,v in pairs(cloudPathways) do
+	for j = 1, v do
+		cloudPathTable[#cloudPathTable + 1] = i
+	end
+end
+local radiationPoints = work.RadiationPoints:GetChildren()
+local argPoints = work.ARGPoints:GetChildren()
+local currentGlobalSong
+PhysicsService:CreateCollisionGroup("CharacterParts")
+PhysicsService:CreateCollisionGroup("SpecialCaseParts")
+PhysicsService:CreateCollisionGroup("OOCCharacterParts")
+PhysicsService:CreateCollisionGroup("OOCSpecialCaseParts")
+PhysicsService:CreateCollisionGroup("Props")
+PhysicsService:CollisionGroupSetCollidable("CharacterParts", "CharacterParts", false)
+PhysicsService:CollisionGroupSetCollidable("SpecialCaseParts", "SpecialCaseParts", false)
+PhysicsService:CollisionGroupSetCollidable("SpecialCaseParts", "Default", false)
+PhysicsService:CollisionGroupSetCollidable("SpecialCaseParts", "CharacterParts", false)
+PhysicsService:CollisionGroupSetCollidable("SpecialCaseParts", "Props", false)
+PhysicsService:CollisionGroupSetCollidable("OOCCharacterParts", "OOCCharacterParts", false)
+PhysicsService:CollisionGroupSetCollidable("OOCCharacterParts", "Props", false)
+PhysicsService:CollisionGroupSetCollidable("OOCSpecialCaseParts", "OOCSpecialCaseParts", false)
+PhysicsService:CollisionGroupSetCollidable("OOCSpecialCaseParts", "Default", false)
+PhysicsService:CollisionGroupSetCollidable("OOCSpecialCaseParts", "Props", false)
+PhysicsService:CollisionGroupSetCollidable("OOCSpecialCaseParts", "OOCCharacterParts", false)
+local songs, announcements = {}, {}
+local songOrder, announcementOrder = {}, {}
+local bannedAccessoryList = {
+	id173624561 = true, id173624749 = true, id173624697 = true, id173624651 = true, id71499623 = true, id24114402 = true,
+	id305888394 = true, id132809431 = true, id153059501 = true, id215718515 = true, id74891470 = true, id191101707 = true,
+	id183468963 = true, id2413964589 = true, id417456127 = true, id262669756 = true, id233253311 = true, id527364921 = true,
+	id1744060292 = true, id169444515 = true, id1704499641 = true, id2316755277 = true, id187998056 = true, id311450131 = true,
+	id192557913 = true, id150381051 = true, id226189871 = true, id24112667 = true, id1474657 = true, id1470025165 = true,
+	id33070696 = true, id2649326901 = true, id1055299 = true, id3345327302 = true, id1527622 = true}
+local passIds = { -- im willing to guess that you copy this id here for the badge or whatever then you assign that to an item and put it in the folder
+	earlyAccessPatron = {Badge = {1941278211}},
+	diamondSafePrize = {Badge = {1843616184, 1843617057, 1843618989}},
+	rubySafePrize = {Badge = {1902977814, 2001393068, 2112760342}},
+	goldSafePrize = {Badge = {2112695696, 2001051636, 1941268118, 1902979604, 1885172239, 1841250148}},
+	allSafesPrize = {Badge = {2112695696, 2001051636, 1941268118, 1902979604, 1885172239, 1841250148, 1902977814, 2001393068, 2112760342,
+		1843616184, 1843617057, 1843618989}},
+	wildWestPack = {GamePass = {5393567}},
+	strandedPack = {GamePass = {5415064}},
+	hunterPack = {GamePass = {5486891}},
+	coyotesPack = {GamePass = {6942002}},
+	thanksgiving2018MysteryBox = {GamePass = {5430194}},
+	thanksgiving2019MysteryBox = {GamePass = {7591628}},
+	xmas18Gift = {GamePass = {5486977}},
+	xmas18SmallMysteryBox = {GamePass = {5486981}},
+	xmas18MediumMysteryBox = {GamePass = {5486994}},
+	xmas18LargeMysteryBox = {GamePass = {5486997}},
+	xmas18SuperMysteryBox = {GamePass = {5487002}},
+	xmas19Gift = {GamePass = {7687516}},
+	xmas19SmallMysteryBox = {GamePass = {7687521}},
+	xmas19MediumMysteryBox = {GamePass = {7687524}},
+	xmas19LargeMysteryBox = {GamePass = {7687528}},
+	newYear1819MysteryBox = {GamePass = {5651895}},
+	july42019MysteryBox = {GamePass = {6718292}},
+	clubBoatesProprietorToy = {Accessory = {1665507887}},
+	clubBoatesToy = {Accessory = {1856118050}},
+	cdfSoldierToy = {Accessory = {2274722823}},
+	uscpfPack = {GamePass = {6000268}},
+	valentinesBox2019 = {GamePass = {5893161}},
+	slfPack = {GamePass = {6009511}},
+	cdfPack = {GamePass = {6040534}},
+	theSentientSombrero = {Badge = {2124452333}},
+	streamExclusive1 = {Accessory = {0}},
+	streamExclusive2 = {Accessory = {0}},
+	streamExclusive3 = {Accessory = {0}},
+	codeOnly = {Accessory = {0}},
+	summerRain19 = {Accessory = {0}},
+	secretPack = {Accessory = {0}},
+	streamTopDonor1 = {Accessory = {0}},
+	streamTopDonor2 = {Accessory = {0}},
+	streamTopDonor3 = {Accessory = {0}},
+	mustOwnVehicle = {Accessory = {0}},
+	scrapSettlementExpansion = {Accessory = {0}},
+	signCreatorExpansion = {Accessory = {0}},
+	militaryMedicalExpansion = {Accessory = {0}},
+	eventItem = {Accessory = {0}},
+	easterEggHunt2019 = {Accessory = {0}},
+	fartInABottle = {GamePass = {6158469}},
+	halloween2019MysteryBox = {GamePass = {7403330}},
+	heavyWeaponsPack = {GamePass = {7466485}},
+	bountyHunterPack = {GamePass = {6274662}},
+	easterBox2019 = {GamePass = {6331894}},
+	biomassEvent19 = {Badge = {2124450223}},
+	tipJarGift = {GamePass = {5366976}},
+	emeraldSafePrize = {Badge = {2124471508}}
+}
+local devIds = {
+	id138865115 = true, --geekedsuperfan
+	}
+if gameId == fl2Id then
+	devIds = {
+		id138865115 = true, --geekedsuperfan (PLACEHOLDER, USELESS)
+	}
+	passIds = {
+		latishPack = {GamePass = {7588999}}
+	}
+end
+local codes = {}
+local specialCaseIds = {
+	id138865115 = {clubBoatesProprietorToy = false}
+}
+if gameId == fl2Id then
+	specialCaseIds = {}
+end
+local mat = Enum.Material
+local mats = {
+	Brick = mat.Brick, Cobblestone = mat.Cobblestone, Concrete = mat.Concrete, CorrodedMetal = mat.CorrodedMetal,
+	DiamondPlate = mat.DiamondPlate, Fabric = mat.Fabric, Foil = mat.Foil, Glass = mat.Glass,
+	Granite = mat.Granite, Grass = mat.Grass, Ice = mat.Ice, Marble = mat.Marble,
+	Metal = mat.Metal, Neon = mat.Neon, Pebble = mat.Pebble, Plastic = mat.Plastic, Sand = mat.Sand,
+	Slate = mat.Slate, SmoothPlastic = mat.SmoothPlastic, Wood = mat.Wood, WoodPlanks = mat.WoodPlanks
+}
+for _,v in pairs(serv.Radio:GetChildren()) do
+	if string.find(v.Name, "Radio") then
+		songs[#songs + 1] = v
+	elseif v.Name ~= "Intro" and v.Name ~= "Outro" then
+		announcements[#announcements + 1] = v
+	end
+end
+	
+local regionFolder = Instance.new("Folder")
+regionFolder.Name = "RegionFolder"
+regionFolder.Parent = work
+
+local bodyPartNames = {Torso = {"UpperTorso", "LowerTorso"}, RightArm = {"RightUpperArm", "RightLowerArm", "RightHand"}, 
+	LeftArm = {"LeftUpperArm", "LeftLowerArm", "LeftHand"}, Head = {"Head"}, LeftLeg = {"LeftUpperLeg", "LeftLowerLeg", "LeftFoot"},
+	RightLeg = {"RightUpperLeg", "RightLowerLeg", "RightFoot"}}
+
+local containerNames = {UpperTorso = "Torso", LowerTorso = "Torso", RightUpperArm = "RightArm", RightLowerArm = "RightArm", 
+	RightHand = "RightArm", LeftUpperArm = "LeftArm", LeftLowerArm = "LeftArm", LeftHand = "LeftArm", Head = "Head", LeftUpperLeg = "LeftLeg", 
+	LeftLowerLeg = "LeftLeg", LeftFoot = "LeftLeg", RightUpperLeg = "RightLeg", RightLowerLeg = "RightLeg", RightFoot = "RightLeg"}
+
+local scrapSegmentTable = {
+	{mat.Metal, {"Dirt brown", "Bronze", "Dark stone grey", "Medium stone grey", "Flint", "Dark taupe", "Pine cone", "Fawn brown", 
+		"Sand red", "Hurricane grey", "Cloudy grey", "Linen", "Copper", "Reddish brown", "Cork", "Burlap", "Beige", "Oyster", "Brown", 
+		"Cashmere", "Khaki", "Lily white", "Seashell", "Light orange", "Medium red", "Burgundy", "Wheat", "Buttermilk", "Institutional white", 
+		"White", "Light reddish orange", "Pastel orange", "Tawny", "Rust", "Cool yellow", "Pastel yellow", "Pearl", "Fog", "Rusty rose", 
+		"Cocoa", "Medium green", "Mint", "Light stone grey", "Light blue", "Laurel green", "Quill grey", "Ghost grey", "Pastel blue", 
+		"Sand green", "Moss", "Artichoke", "Sage green", "Cadet blue", "Grime", "Fossil", "Medium blue", "Sand blue", "Smoky grey", 
+		"Storm blue", "Earth green", "Slime green", "Black", "Navy blue"}}, 
+	{mat.CorrodedMetal, {"Dirt brown", "Bronze", "Dark stone grey", "Medium stone grey", "Flint", "Dark taupe", "Pine cone", "Fawn brown", 
+		"Sand red", "Hurricane grey", "Cloudy grey", "Linen", "Copper", "Reddish brown", "Cork", "Burlap", "Beige", "Oyster", "Brown", 
+		"Cashmere", "Khaki", "Lily white", "Seashell", "Light orange", "Medium red", "Burgundy", "Wheat", "Buttermilk", "Institutional white", 
+		"White", "Light reddish orange", "Pastel orange", "Tawny", "Rust", "Cool yellow", "Pastel yellow", "Pearl", "Fog", "Rusty rose", 
+		"Cocoa", "Medium green", "Mint", "Light stone grey", "Light blue", "Laurel green", "Quill grey", "Ghost grey", "Pastel blue", 
+		"Sand green", "Moss", "Artichoke", "Sage green", "Cadet blue", "Grime", "Fossil", "Medium blue", "Sand blue", "Smoky grey", 
+		"Storm blue", "Earth green", "Slime green", "Black", "Navy blue", "Mauve", "Terra Cotta", "Sunrise", "Dusty Rose", "Gold", 
+		"Bright yellow", "Bright blue", "Bright red", "Bright green", "Pink", "Really black", "Neon orange", "Bright orange", "Electric blue", 
+		"Cyan", "Pastel light blue", "Pastel blue-green", "CGA brown", "Burnt Sienna", "Persimmon", "Parsley green", "Shamrock", "Lilac", 
+		"Bright violet", "Plum", "Lavender", "Pastel brown", "Light orange"}},
+	{mat.Wood, {"Dirt brown", "Brown", "Pine cone", "Reddish brown", "Pastel brown", "Light orange", "Grime", "Flint", "Dark taupe"}}, 
+	{mat.WoodPlanks, {"Dirt brown", "Brown", "Pine cone", "Reddish brown", "Pastel brown", "Light orange", "Grime", "Flint", "Dark taupe", 
+		"Sand red", "Sand green", "Sand blue", "White", "Lily white", "Quill grey", "Mid gray", "Fossil", "Ghost grey", "Medium stone grey", 
+		"Dark stone grey", "Black", "Cocoa", "Earth green", "Grime", "Cadet blue", "Dusty Rose"}}, 
+	{mat.DiamondPlate, {"Flint", "Medium stone grey", "Mid gray", "Dark stone grey", "Black", "Dark taupe", "Pine cone"}}, 
+}
+
+game.Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function(char)
+		char:WaitForChild("Humanoid").Died:Connect(function()
+			plrStatus[plr.Name] = "Spawn"
+			teleportingIndex[plr.Name] = nil
+			local falseChar = char:FindFirstChild("FalseCharacter")
+			if falseChar then
+				falseChar.Value:Destroy()
+			end
+			local charBio = rep.CharacterBios:FindFirstChild(plr.Name)
+			local lastLocation = charBio:FindFirstChild("Last location")
+			while not char:FindFirstChild("HumanoidRootPart") do wait() end
+			local charPos = char.PrimaryPart.CFrame.p
+			if charPos.Y > -110 then
+				if not lastLocation then
+					lastLocation = Instance.new("Vector3Value")
+					lastLocation.Name = "Last_location"
+					lastLocation.Parent = charBio
+				end
+				lastLocation.Value = charPos
+			elseif lastLocation then
+				lastLocation:Destroy()
+			end
+			local servData = gameData[plr.Name]["Server"]
+			local storedTools, storedAcc, storedEquip = {}, {}, {}
+			for i,v in pairs(servData["Tools"]) do storedTools[i] = v end
+			for i,v in pairs(servData["Accessories"]) do storedAcc[i] = v end
+			for i,v in pairs(servData["Equipment"]) do storedEquip[i] = v end
+			gameData[plr.Name]["Server"]["LastCharacter"] = {Accessories = storedAcc,
+				Tools = storedTools, Equipment = storedEquip, Shirt = servData["Shirt"],
+				Pants = servData["Pants"], BodyColor = servData["BodyColor"], 
+				RPName = servData["RPName"], Bio = servData["Bio"]}
+			gameData[plr.Name]["Server"]["Equipment"] = {Head = "None", Torso = "None", RightArm = "None",
+				LeftArm = "None", RightLeg = "None", LeftLeg = "None"}
+			gameData[plr.Name]["Server"]["Shirt"] = "Custom"
+			gameData[plr.Name]["Server"]["Pants"] = "Custom"
+			for _,v in pairs({"Primary", "Secondary", "Utility1", "Utility2", "Utility3"}) do
+				gameData[plr.Name]["Server"]["Tools"][v] = {Variant = "None", Base = "None"}
+			end
+			local bio = rep.CharacterBios:FindFirstChild(plr.Name)
+			bio.RPName.Value = "[ No name ]"
+			bio.Value = "[ No bio ]"
+		end)
+		
+		plrStatus[plr.Name] = "Spawn"
+		char.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		char.Humanoid.WalkSpeed = 8
+		local falseHead = serv.FalseHead:Clone()
+		falseHead.Head.CFrame = char:WaitForChild("Head").CFrame
+		local w = Instance.new('Weld')
+		w.Part0 = char.Head
+		w.Part1 = falseHead.Head
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+		w.Parent = w.Part1
+		falseHead.Name = "[ No name ]"
+		falseHead.Parent = char
+		
+		local meshHead = serv.MeshHead:Clone()
+		meshHead.CFrame = char.Head.CFrame
+		local w = Instance.new('Weld')
+		w.Part0 = char.Head
+		w.Part1 = meshHead
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+		w.Parent = w.Part1
+		char.Head.Transparency = 1
+		meshHead.Parent = char
+		
+		local diceRoller = serv.FalseHead:Clone()
+		diceRoller.Head.CFrame = char:WaitForChild("Head").CFrame * CFrame.new(0, 1, 0)
+		local w = Instance.new('Weld')
+		w.Part0 = char.Head
+		w.Part1 = diceRoller.Head
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+		w.Parent = w.Part1
+		diceRoller.Name = ""
+		diceRoller.Humanoid.Name = "DiceRoller"
+		diceRoller.Parent = char
+		
+		local humanState = Instance.new("StringValue")
+		humanState.Name = "HumanState"
+		humanState.Value = "Humanoid"
+		humanState.Parent = char
+		
+		--local tempLight = Instance.new("PointLight", char:WaitForChild("UpperTorso"))
+		char:SetPrimaryPartCFrame(work:FindFirstChild("SpawnLocation"..tostring(math.random(1, 3))).CFrame * 
+			CFrame.new(math.random(-5, 5), 4, math.random(-5, 5)))
+		
+		local collisionPart = serv.CollisionPart:Clone()
+		collisionPart.CFrame = char.PrimaryPart.CFrame * CFrame.new(0, -2.4, 0)
+		w = Instance.new('Weld')
+		w.Part0 = char.PrimaryPart
+		w.Part1 = collisionPart
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+		w.Parent = w.Part1
+		collisionPart.Parent = char
+		local bodyProperties, accessoryProperties = PhysicalProperties.new(1.2, 0.3, 0.5, 1, 1), 
+			PhysicalProperties.new(0.01, 0.3, 0.5, 1, 1)
+		for _,v in pairs(char:GetChildren()) do
+			if v:IsA("BasePart") then
+				v.CustomPhysicalProperties = bodyProperties
+			elseif v:IsA("Accessory") then
+				v.Handle.CustomPhysicalProperties = accessoryProperties
+			end
+		end
+		for _,v in pairs(serv.CharacterSounds:GetChildren()) do
+			local clo = v:Clone()
+			clo.Parent = char.PrimaryPart
+		end
+		if plr.UserId >= 0 then
+			while not gameData[plr.Name] do wait() end
+			while not gameData[plr.Name]["ItemsLoaded"] do wait() end
+			gameData[plr.Name]["Server"]["Accessories"] = {}
+			local charInfo = game.Players:GetCharacterAppearanceInfoAsync(plr.UserId)
+			for _,v in pairs(charInfo["assets"]) do
+				if v["assetType"]["name"] == "Hat" or string.find(v["assetType"]["name"], "Accessory") then
+					local loadedAccessory = InsertService:LoadAsset(v["id"])
+					local meshId
+					for _,n in pairs(loadedAccessory:GetChildren()) do
+						if not n.Handle:FindFirstChild("Mesh") then
+							n.Handle.SpecialMesh.Name = "Mesh"
+						end
+						meshId = n.Handle.Mesh.MeshId
+						break
+					end
+					for _,n in pairs(char.Humanoid:GetAccessories()) do
+						if not n.Handle:FindFirstChild("Mesh") then
+							n.Handle.SpecialMesh.Name = "Mesh"
+						end
+						if n.Handle.Mesh.MeshId == meshId then
+							gameData[plr.Name]["Server"]["Accessories"]["id"..v["id"]] = {Name = n.Name, Object = n}
+							local originalId = Instance.new("NumberValue")
+							originalId.Name = "OriginalId"
+							originalId.Value = v["id"]
+							originalId.Parent = n.Handle.Mesh
+							break
+						end
+					end
+					loadedAccessory:Destroy()
+				end
+			end
+			local headSize = charInfo["scales"]["head"]
+			local color = BrickColor.new(charInfo["bodyColors"]["headColorId"])
+			if not color then 
+				color = Color3.new(1, 1, 1)
+			end
+			meshHead.BrickColor = color
+			gameData[plr.Name]["Server"]["BodyColor"] = {r = color.r, g = color.g, b = color.b}
+			meshHead.Size = Vector3.new(1.198 * headSize, 1.202 * headSize, 1.198 * headSize)
+			for _,v in pairs(char.Head:GetChildren()) do
+				if v:IsA("Decal") then
+					v.Parent = meshHead
+				end
+			end
+		end
+		for _,v in pairs(char:GetDescendants()) do
+			if v:IsA("BasePart") then
+				PhysicsService:SetPartCollisionGroup(v, "CharacterParts")
+			end
+		end
+		PhysicsService:SetPartCollisionGroup(collisionPart, "SpecialCaseParts")
+		PhysicsService:SetPartCollisionGroup(char.UpperTorso, "SpecialCaseParts")
+		while not currentGlobalSong do
+			wait()
+		end
+		rep.RadioUpdate:FireClient(plr, "Song", currentGlobalSong)
+	end)
+	FetchData(plr)
+	plrStatus[plr.Name] = "Spawn"
+	local bio = Instance.new("StringValue")
+	bio.Name = plr.Name
+	bio.Value = "[ No bio ]"
+	local metaTime = Instance.new("StringValue")
+	metaTime.Name = "LastMeta"
+	metaTime.Value = "NEVER"
+	metaTime.Parent = bio
+	local metaTime = Instance.new("StringValue")
+	metaTime.Name = "RPName"
+	metaTime.Value = "[ No name ]"
+	metaTime.Parent = bio
+	local metaBool = Instance.new("BoolValue")
+	metaBool.Name = "ToggleMeta"
+	metaBool.Parent = bio
+	local lastRoll = Instance.new("IntValue")
+	lastRoll.Name = "LastRoll"
+	lastRoll.Parent = bio
+	local level = Instance.new("IntValue")
+	level.Name = "Level"
+	level.Value = math.floor(gameData[plr.Name]["Account"]["TimePlayed"] / 1800)
+	level.Parent = bio
+	bio.Parent = rep.CharacterBios
+	if plr.UserId == 117755 then
+		for _,v in pairs(game.Players:GetChildren()) do
+			if v ~= plr then
+				if gameId == fl2Id then
+					BadgeService:AwardBadge(v.userId, chadBadge)
+				else
+					BadgeService:AwardBadge(v.userId, chadBadge)
+				end
+			end
+		end
+	else
+		for _,v in pairs(game.Players:GetChildren()) do
+			if v.UserId == 117755 then
+				if gameId == fl2Id then
+					BadgeService:AwardBadge(v.userId, chadBadge)
+				else
+					BadgeService:AwardBadge(v.userId, chadBadge)
+				end
+			end
+		end
+	end
+end)
+
+local pvtSvId, pvtSvOwnerId = game.PrivateServerId, game.PrivateServerOwnerId
+
+function rep.OwnedItemsUpdate.OnServerInvoke(plr)
+	while not gameData[plr.Name] do wait() end
+	while not gameData[plr.Name]["ItemsLoaded"] do wait() end
+	return gameData[plr.Name]["Account"]["ToolsOwned"], gameData[plr.Name]["Account"]["MorphsOwned"], 
+		gameData[plr.Name]["Account"]["Currency"], gameData[plr.Name]["Account"]["PropsOwned"], 
+		#gameData[plr.Name]["Server"]["PropsPlaced"], gameData[plr.Name]["Server"]["PropLimit"], 
+		gameData[plr.Name]["Account"]["ExpansionsOwned"], {gameData[plr.Name]["Account"]["PropSaves"]["Build1"]["Name"],
+		gameData[plr.Name]["Account"]["PropSaves"]["Build2"]["Name"], gameData[plr.Name]["Account"]["PropSaves"]["Build3"]["Name"],
+		gameData[plr.Name]["Account"]["PropSaves"]["Build4"]["Name"], gameData[plr.Name]["Account"]["PropSaves"]["Build5"]["Name"]}, 
+		{gameData[plr.Name]["Account"]["CharSaves"]["Character1"]["Name"], gameData[plr.Name]["Account"]["CharSaves"]["Character2"]["Name"], 
+		gameData[plr.Name]["Account"]["CharSaves"]["Character3"]["Name"], gameData[plr.Name]["Account"]["CharSaves"]["Character4"]["Name"], 
+		gameData[plr.Name]["Account"]["CharSaves"]["Character5"]["Name"], gameData[plr.Name]["Account"]["CharSaves"]["Character6"]["Name"], 
+		gameData[plr.Name]["Account"]["CharSaves"]["Character7"]["Name"], gameData[plr.Name]["Account"]["CharSaves"]["Character8"]["Name"], 
+		gameData[plr.Name]["Account"]["CharSaves"]["Character9"]["Name"], gameData[plr.Name]["Account"]["CharSaves"]["Character10"]["Name"]}, 
+		gameData[plr.Name]["Account"]["MountsOwned"], pvtSvOwnerId == plr.UserId
+end
+
+--[[data organization: 
+		ACCOUNT = {time played, currency, {tools owned}, {morphs owned}, {vehicles owned}, {prop owned}, 
+			{expansions owned}, {prop placer saves}}
+		SERVER = {RP name, bio, {equipped tools}, {equipped morph parts}, equipped shirt, equipped pants, {props placed}, 
+			bulletTrailActive, propLimit, ATFABRank, itemsLoaded}
+]]
+function FetchData(plr)
+	local t = tick()
+	local plrData = DataStore:UpdateAsync(plr.userId, function(old) return old end)
+	print("Time taken to load: ", tick()-t," :for ",plr.Name)
+	local userId = plr.UserId
+	local rank = 0
+	if userId > 0 then
+		rank = plr:GetRankInGroup(groupId)
+	end
+	if plrData then	
+		--old player found
+		gameData[plr.Name] = {Account = plrData, 
+			Server = {RPName = "[ No name ]", Bio = "[ No bio ]", Accessories = {}, BodyColor = {}, 
+			Equipment = {Head = "None", Torso = "None", RightArm = "None", LeftArm = "None", RightLeg = "None", LeftLeg = "None"}, 
+			Shirt = "Custom", Pants = "Custom", PropsPlaced = {}, BulletTrails = false, PropLimit = rep.PropLimit.Value, 
+			ATFABRank = rank, LastSave = tick()}, ItemsLoaded = false}
+		--UPDATES TO SYSTEM
+		-- if u have expansion then you have a higher prop limit
+		if not gameData[plr.Name]["Account"]["Currency"] then
+			if gameData[plr.Name]["Account"]["ScrapParts"] then
+				gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["ScrapParts"]
+				gameData[plr.Name]["Account"]["ScrapParts"] = nil
+			else
+				gameData[plr.Name]["Account"]["Currency"] = 0
+			end
+		end
+		if not gameData[plr.Name]["Account"]["PropsOwned"] then
+			gameData[plr.Name]["Account"]["PropsOwned"] = {}
+		end
+		if not gameData[plr.Name]["Account"]["ExpansionsOwned"] then
+			gameData[plr.Name]["Account"]["ExpansionsOwned"] = {}
+		end
+		if gameData[plr.Name]["Account"]["PropsOwned"]["Bunker"] then
+			gameData[plr.Name]["Account"]["ExpansionsOwned"]["xmas18SuperMysteryBox"] = true
+		end
+		if devIds["id"..userId] then
+			gameData[plr.Name]["Account"]["ExpansionsOwned"]["xmas18SuperMysteryBox"] = true
+			gameData[plr.Name]["Account"]["ExpansionsOwned"]["scrapSettlementExpansion"] = true
+			gameData[plr.Name]["Account"]["ExpansionsOwned"]["signCreatorExpansion"] = true
+		end
+		if gameData[plr.Name]["Account"]["ExpansionsOwned"]["xmas18SuperMysteryBox"] then
+			gameData[plr.Name]["Server"]["PropLimit"] = gameData[plr.Name]["Server"]["PropLimit"] + 15
+		end
+		if gameData[plr.Name]["Account"]["ExpansionsOwned"]["scrapSettlementExpansion"] then
+			gameData[plr.Name]["Server"]["PropLimit"] = gameData[plr.Name]["Server"]["PropLimit"] + 30
+		end
+		if gameData[plr.Name]["Account"]["ExpansionsOwned"]["signCreatorExpansion"] then
+			gameData[plr.Name]["Server"]["PropLimit"] = gameData[plr.Name]["Server"]["PropLimit"] + 10
+		end
+		if gameData[plr.Name]["Account"]["ExpansionsOwned"]["militaryMedicalExpansion"] then
+			gameData[plr.Name]["Server"]["PropLimit"] = gameData[plr.Name]["Server"]["PropLimit"] + 30
+		end
+		if not gameData[plr.Name]["Account"]["LastReset"] then
+			gameData[plr.Name]["Account"]["LastReset"] = "never"
+		end
+		if not gameData[plr.Name]["Account"]["Achievements"] then
+			gameData[plr.Name]["Account"]["Achievements"] = {}
+		end
+	else
+		--new player!
+		gameData[plr.Name] = {Account = {TimePlayed = 0, Currency = 0, ToolsOwned = {}, MorphsOwned = {}, 
+			MountsOwned = {}, PropsOwned = {}, ExpansionsOwned = {}, LastReset = "never", Achievements = {}}, 
+			Server = {RPName = "[ No name ]", Bio = "[ No bio ]", Accessories = {}, BodyColor = {}, 
+			Equipment = {Head = "None", Torso = "None", RightArm = "None", LeftArm = "None", RightLeg = "None", LeftLeg = "None"}, 
+			Shirt = "Custom", Pants = "Custom", PropsPlaced = {}, BulletTrails = false, PropLimit = rep.PropLimit.Value, 
+			ATFABRank = rank, LastSave = tick()}, ItemsLoaded = false}
+	end
+	if not gameData[plr.Name]["Account"]["PropSaves"] then
+		gameData[plr.Name]["Account"]["PropSaves"] = {}
+		for i = 1, 5 do
+			gameData[plr.Name]["Account"]["PropSaves"]["Build"..i] = {Name = "Empty Save", Props = {}}
+		end
+	elseif not gameData[plr.Name]["Account"]["PropSaves"]["Build4"] then
+		gameData[plr.Name]["Account"]["PropSaves"]["Build4"] = {Name = "Empty Save", Props = {}}
+		gameData[plr.Name]["Account"]["PropSaves"]["Build5"] = {Name = "Empty Save", Props = {}}
+	end
+	if not gameData[plr.Name]["Account"]["CharSaves"] then
+		gameData[plr.Name]["Account"]["CharSaves"] = {}
+		for i = 1, 10 do
+			gameData[plr.Name]["Account"]["CharSaves"]["Character"..i] = {Name = "Empty Save"}
+		end
+	elseif not gameData[plr.Name]["Account"]["CharSaves"]["Character6"] then
+		for i = 6, 10 do
+			gameData[plr.Name]["Account"]["CharSaves"]["Character"..i] = {Name = "Empty Save"}
+		end
+	end
+	if not gameData[plr.Name]["Server"]["Tools"] then
+		gameData[plr.Name]["Server"]["Tools"] = {}
+		for _,v in pairs({"Primary", "Secondary", "Utility1", "Utility2", "Utility3"}) do
+			gameData[plr.Name]["Server"]["Tools"][v] = {Base = "None", Variant = "None"}
+		end
+	end
+	
+	local saveData = false
+	if gameData[plr.Name]["Account"]["LastReset"] ~= lastReset then
+		gameData[plr.Name]["Account"]["OldTools"] = gameData[plr.Name]["Account"]["ToolsOwned"]
+		gameData[plr.Name]["Account"]["OldMorphs"] = gameData[plr.Name]["Account"]["MorphsOwned"]
+		for _,v in pairs(serv.Tools:GetChildren()) do
+			for _,n in pairs(v:GetChildren()) do
+				if n:IsA("Folder") and gameData[plr.Name]["Account"]["ToolsOwned"][n.Name] and n:FindFirstChild("Pass") and 
+					(n.Pass.Value ~= "forSale" and n.Pass.Value ~= "easterEggHunt2019" and n.Pass.Value ~= "hiddenOnMap") 
+					and gameData[plr.Name]["Account"]["ToolsOwned"][n.Name] ~= "Code_Obtained" then
+					gameData[plr.Name]["Account"]["ToolsOwned"][n.Name] = nil
+				end
+			end
+		end
+		for i,v in pairs(gameData[plr.Name]["Account"]["MorphsOwned"]) do
+			local morph = serv.Morphs:FindFirstChild(i)
+			if morph and morph:FindFirstChild("Pass") and (morph.Pass.Value ~= "forSale" and 
+				morph.Pass.Value ~= "easterEggHunt2019" and morph.Pass.Value ~= "secretPack" and morph.Pass.Value ~= "hiddenOnMap") 
+				and gameData[plr.Name]["Account"]["MorphsOwned"] ~= "Code_Obtained" then
+				gameData[plr.Name]["Account"]["MorphsOwned"][i] = nil
+			end
+		end
+		gameData[plr.Name]["Account"]["LastReset"] = lastReset
+		saveData = true
+	end
+	
+	if saveData then
+		SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+	end
+	---------------------------------------
+	
+	local searchTable = {}
+	for _,v in pairs(serv.Tools:GetChildren()) do
+		for _,n in pairs(v:GetChildren()) do
+			local added = false
+			if not gameData[plr.Name]["Account"]["ToolsOwned"][n.Name] and n:IsA("Folder") and 
+				(n:FindFirstChild("Pass") or n:FindFirstChild("LevelReq")) then
+				searchTable[#searchTable + 1] = {"ToolsOwned", n}
+				added = true
+			end
+		end
+	end
+	for _,v in pairs(rep.Props:GetChildren()) do
+		if not gameData[plr.Name]["Account"]["PropsOwned"][v.Name] and v:FindFirstChild("Pass") then
+			searchTable[#searchTable + 1] = {"PropsOwned", v}
+		end
+	end
+	for _,v in pairs(serv.Morphs:GetChildren()) do
+		if not gameData[plr.Name]["Account"]["MorphsOwned"][v.Name] and (v:FindFirstChild("Pass") or v:FindFirstChild("LevelReq")) then
+			searchTable[#searchTable + 1] = {"MorphsOwned", v}
+		end
+	end
+	for _,v in pairs(serv.Vehicles:GetChildren()) do
+		if not gameData[plr.Name]["Account"]["MountsOwned"][v.Name] then
+			searchTable[#searchTable + 1] = {"MountsOwned", v}
+		end
+	end
+	for _,v in pairs(searchTable) do
+		local ownsItem = true
+		if not devIds["id"..userId] and plr.Name ~= "Player1" then
+			local pass = v[2]:FindFirstChild("Pass")
+			local levelReq = v[2]:FindFirstChild("LevelReq")
+			local specialCaseId = pass and specialCaseIds["id"..userId] and specialCaseIds["id"..userId][pass.Value]
+			if not specialCaseId then
+				if levelReq and math.floor(gameData[plr.Name]["Account"]["TimePlayed"] / 1800) < levelReq.Value then
+					ownsItem = false
+				end
+				if pass and ownsItem then
+					local ownershipIds = passIds[pass.Value]
+					if ownershipIds then
+						if ownershipIds["Badge"] then
+							for _,itemId in pairs(ownershipIds["Badge"]) do
+								if not BadgeService:UserHasBadgeAsync(userId, itemId) then
+									ownsItem = false
+									break
+								end
+							end
+						end
+						if ownsItem and ownershipIds["GamePass"] then
+							for _,itemId in pairs(ownershipIds["GamePass"]) do
+								if not MarketService:UserOwnsGamePassAsync(userId, itemId) then
+									ownsItem = false
+									break
+								end
+							end
+						end
+						if ownsItem and not gameData[plr.Name]["Account"]["ExpansionsOwned"][pass.Value] and ownershipIds["Accessory"] then
+							for _,itemId in pairs(ownershipIds["Accessory"]) do
+								if itemId == 0 or not MarketService:PlayerOwnsAsset(plr, itemId) then
+									ownsItem = false
+									break
+								end
+							end
+						end
+					elseif pass.Value == "ARG" or pass.Value == "hiddenOnMap" or pass.Value == "forSale" then
+						ownsItem = false
+					elseif pass.Value == "mustOwnVehicle" and #gameData[plr.Name]["Account"]["MountsOwned"] == 0 then
+						ownsItem = false
+					elseif pass.Value == "staffOnly" and gameData[plr.Name]["Server"]["ATFABRank"] < 200 then
+						-- check this out...
+						ownsItem = false
+					end	
+				end
+			end
+		end
+		if ownsItem then
+			gameData[plr.Name]["Account"][v[1]][v[2].Name] = true
+		end
+	end
+	CheckForVehicles(plr.Name)
+	gameData[plr.Name]["ItemsLoaded"] = true
+end
+
+function CheckForVehicles(plrName)
+	if not gameData[plrName]["Account"]["ToolsOwned"]["Vehicle Placer"] then
+		local ownsVehicles = false
+		for _,v in pairs(gameData[plrName]["Account"]["MountsOwned"]) do
+			if v then
+				ownsVehicles = true
+				break
+			end
+		end
+		if ownsVehicles then
+			gameData[plrName]["Account"]["ToolsOwned"]["Vehicle Placer"] = true
+		end
+	end
+end
+
+function SaveData(playerId, value, store)
+	local val = store:UpdateAsync(playerId, function(old) return value end)
+	if val == value then
+		return true --successful
+	else
+		return false --failed
+	end
+end
+
+serv.GiveCurrency_Server.Event:Connect(function(amount, plr)
+	if gameData[plr.Name] then
+		gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + amount
+		rep.ReceiptProcessed:FireClient(plr, gameData[plr.Name]["Account"]["Currency"])
+		SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+	end
+end)
+
+local productFunctions = {}
+
+--ATF7
+productFunctions[427089544] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 10
+	return true
+end
+productFunctions[427089771] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 35
+	return true
+end
+productFunctions[427089868] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 100
+	return true
+end
+productFunctions[499136087] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 1000
+	return true
+end
+--FL2
+productFunctions[925286073] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 10
+	return true
+end
+productFunctions[925286524] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 35
+	return true
+end
+productFunctions[925287127] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 100
+	return true
+end
+productFunctions[925288346] = function(receipt, plr)
+	gameData[plr.Name]["Account"]["Currency"] = gameData[plr.Name]["Account"]["Currency"] + 1000
+	return true
+end
+
+MarketService.ProcessReceipt = function(receiptInfo)
+	local playerProductKey = receiptInfo.PlayerId .. "_" .. receiptInfo.PurchaseId
+	local purchased = false
+	local success, errorMessage = pcall(function()
+		purchased = PurchaseStore:GetAsync(playerProductKey)
+	end)
+	if success and purchased then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	elseif errorMessage then
+		error("Data store error:" .. errorMessage)
+	end
+	local plr = PlayerService:GetPlayerByUserId(receiptInfo.PlayerId)
+	if not plr then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local purchaseProcessor = productFunctions[receiptInfo.ProductId]
+	local success, result = pcall(purchaseProcessor, receiptInfo, plr)
+	if not success or not result then
+		warn("Error occurred while processing a product purchase")
+		print("\nProductId:", receiptInfo.ProductId)
+		print("\nPlayer:", plr)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+ 	local success, errorMessage = pcall(function()
+		PurchaseStore:SetAsync(playerProductKey, true)
+		SaveData(receiptInfo.PlayerId, gameData[plr.Name]["Account"], DataStore)
+	end)
+	if not success then
+		error("Cannot save purchase data: " .. errorMessage)
+	end
+	rep.ReceiptProcessed:FireClient(plr, gameData[plr.Name]["Account"]["Currency"])
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+function rep.CurrencyPurchase.OnServerInvoke(plr, mode, input1)
+	if mode == "Tool" then
+		local currency = gameData[plr.Name]["Account"]["Currency"]
+		local price
+		for _,v in pairs(serv.Tools:GetChildren()) do
+			local variant = v:FindFirstChild(input1)
+			if variant then
+				price = variant.Pass.Price.Value
+				break
+			end
+		end
+		if currency >= price then
+			local newAmount = currency - price
+			gameData[plr.Name]["Account"]["Currency"] = newAmount
+			gameData[plr.Name]["Account"]["ToolsOwned"][input1] = true
+			SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+			return true, newAmount
+		else
+			return false
+		end
+	elseif mode == "Morph" then
+		local currency = gameData[plr.Name]["Account"]["Currency"]
+		local price = serv.Morphs:FindFirstChild(input1).Pass.Price.Value
+		if currency >= price then
+			local newAmount = currency - price
+			gameData[plr.Name]["Account"]["Currency"] = newAmount
+			gameData[plr.Name]["Account"]["MorphsOwned"][input1] = true
+			SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+			return true, newAmount
+		else
+			return false
+		end
+	elseif mode == "Expansion" then
+		local currency = gameData[plr.Name]["Account"]["Currency"]
+		local item = rep.ExpansionPacks:FindFirstChild(input1)
+		local price = item.Price.Value
+		if currency >= price then
+			local newAmount = currency - price
+			gameData[plr.Name]["Account"]["Currency"] = newAmount
+			for _,v in pairs(rep.Props:GetChildren()) do
+				local pass = v:FindFirstChild("Pass")
+				if pass and pass.Value == item.PassName.Value then
+					gameData[plr.Name]["Account"]["PropsOwned"][v.Name] = true
+				end
+			end
+			gameData[plr.Name]["Account"]["ExpansionsOwned"][item.PassName.Value] = true
+			gameData[plr.Name]["Server"]["PropLimit"] = gameData[plr.Name]["Server"]["PropLimit"] + item.PropLimitBoost.Value
+			SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+			return true, newAmount, gameData[plr.Name]["Account"]["PropsOwned"], gameData[plr.Name]["Server"]["PropLimit"]
+		else
+			return false
+		end
+	end
+end
+
+--courtesy of ImmortalSlayer / Fractality_alt
+local rng = Random.new()
+local function Shuffle(baseT)
+	local t = baseT
+    for i = #t, 2, -1 do
+        local j = rng:NextInteger(1, i)
+        t[j], t[i] = t[i], t[j]
+    end
+	return t
+end
+--------------------------------------------
+
+game.Players.PlayerRemoving:Connect(function(plr)
+	plrStatus[plr.Name] = nil
+	teleportingIndex[plr.Name] = nil
+	if dummyList[plr.Name] then
+		dummyList[plr.Name]:Destroy()
+		dummyList[plr.Name] = nil
+	end
+	SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+	ClearProps(plr.Name)
+	for _,item in pairs(work:GetChildren()) do
+		if string.find(item.Name, plr.Name) then
+			item:Destroy()
+		end
+	end
+	gameData[plr.Name] = nil
+end)
+-- check this out
+rep.MouseInteraction.OnServerEvent:Connect(function(plr, part)
+	if part.Parent.Type.Value == "Door" or part.Parent.Type.Value == "ReverseDoor" then
+		InteractDoor(part.Parent, part.Parent.Type.Value)
+	elseif part.Parent.Type.Value == "Light" then
+		InteractLight(part)
+	elseif part.Parent.Type.Value == "Candle" then
+		InteractCandle(part)
+	elseif part.Parent.Type.Value == "Fire" then
+		InteractFire(part)
+	elseif part.Parent.Type.Value == "LightRoom" then
+		InteractLightRoom(part)
+	elseif part.Parent.Type.Value == "Chair" then
+		InteractChair(part, plr.Character)
+	elseif part.Parent.Type.Value == "Bed" then
+		InteractBed(part, plr.Character)
+	elseif part.Parent.Type.Value == "Elevator" then
+		local lift = part.Parent
+		if part.Parent:findFirstChild("Elevator") then
+			lift = part.Parent.Elevator
+		end
+		InteractElevator(part, lift)
+	elseif part.Parent.Type.Value == "Stove" then
+		InteractStove(part)
+	elseif part.Parent.Type.Value == "Drawer" then
+		InteractDrawer(part)
+	elseif part.Parent.Type.Value == "Computer" then
+		InteractComputer(part)
+	elseif part.Parent.Type.Value == "Sink" then
+		InteractSink(part)
+	elseif part.Parent.Type.Value == "Toilet" then
+		InteractToilet(part)
+	elseif part.Parent.Type.Value == "Shower" then
+		InteractShower(part)
+	elseif part.Parent.Type.Value == "ElectricDoor" then
+		InteractElectricDoor(part)
+	elseif part.Parent.Type.Value == "Drawgate" then
+		InteractDrawgate(part)
+	elseif part.Parent.Type.Value == "Radio" then
+		InteractRadio(part)
+	end
+end)
+
+function FindFalseHumanoid(char)
+	for _,v in pairs(char:GetChildren()) do
+		if v:FindFirstChild("Humanoid") then
+			return v
+		end
+	end
+end
+
+function WeldToolParts(tool)
+	for _,v in pairs(tool:GetChildren()) do
+		if not v:IsA("Model") and v ~= tool.PrimaryPart then
+			local w = Instance.new("Weld") 
+			w.Part0 = v 
+			w.Part1 = tool.PrimaryPart 
+			w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+			w.Name = "Weld_"..v.Name 
+			w.Parent = w.Part1
+		elseif v:IsA("Model") then
+			for _,n in pairs(v:GetChildren()) do
+				if n ~= v.PrimaryPart then
+					local w = Instance.new("Weld") 
+					w.Part0 = n 
+					w.Part1 = v.PrimaryPart 
+					w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+					w.Name = "Weld_"..n.Name 
+					w.Parent = w.Part1
+				end
+			end
+			local w = Instance.new("Weld") 
+			w.Part0 = v.PrimaryPart
+			w.Part1 = tool.PrimaryPart 
+			w.C0 = w.Part0.CFrame:toObjectSpace(w.Part0.CFrame)
+			w.C1 = w.Part1.CFrame:toObjectSpace(w.Part0.CFrame)
+			w.Name = "Weld_"..v.Name 
+			w.Parent = w.Part1
+		end
+	end
+end
+
+function WeldToHolster(char, storedTool, effectSustained)
+	local tool = storedTool.Model:Clone()
+	local models = {tool}
+	local offHandTool = storedTool:FindFirstChild("Model_OffHand")
+	if offHandTool then
+		models[2] = offHandTool:Clone()
+	end
+	for i,model in pairs(models) do
+		local weldBase = char:FindFirstChild(model.Holster.WeldBase.Value)
+		model:SetPrimaryPartCFrame(weldBase.CFrame)
+		model.Holster:Destroy()
+		model.PrimaryPart = model.Handle
+		WeldToolParts(model)
+		local w = Instance.new("Weld") 
+		w.Part0 = weldBase
+		w.Part1 = model.PrimaryPart
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part0.CFrame) 
+		w.C1 = w.Part1.CFrame:toObjectSpace(w.Part0.CFrame)
+		w.Parent = w.Part1
+		w.Name = "PrimaryWeld"
+		local suffix = ""
+		if i == 2 then
+			suffix = "_OffHand"
+		end
+		model.Name = storedTool.Name..suffix
+		model.Parent = char
+	end
+	if effectSustained then
+		if tool:FindFirstChild("Light") then
+			for _,v in pairs(tool.Light:GetChildren()) do
+				if v.Name == "Light" then
+					v.Enabled = true
+				end
+			end
+			tool.Light.Material = Enum.Material.Neon
+			tool.Light.BrickColor = BrickColor.new("White")
+		end
+	end
+end
+
+rep.CharacterSound.OnServerEvent:Connect(function(plr, humanoidType, soundName, soundSpeed, isSoundStarting)
+	local char = plr.Character
+	if char and char.PrimaryPart then
+		if soundName and soundName ~= "Landed" then
+			soundName = "Move"..soundName.."Surface"
+			local sound = char.PrimaryPart:FindFirstChild(humanoidType..soundName)
+			if not sound then
+				sound = char.PrimaryPart:FindFirstChild(soundName)
+			end
+			if sound then
+				if isSoundStarting then
+					if sound.Name == "MoveLooseSurface" then --REMOVE AFTER WINTER
+						if soundSpeed == 1 then
+							soundSpeed = 1.5
+						else
+							soundSpeed = 2
+						end
+					end
+					sound.PlaybackSpeed = soundSpeed
+					if not sound.IsPlaying then
+						sound:Play()
+					end
+				else
+					sound:Stop()
+				end
+			end
+		else
+			local sound = char.PrimaryPart:FindFirstChild("Landed")
+			sound:Play()
+		end
+	end
+end)
+
+rep.RollD20.OnServerEvent:Connect(function(plr, dicePart)
+	local char = plr.Character
+	if char then
+		dicePart.Name = "Rolling D20..."
+		wait(1)
+		for i = 1, 10 do
+			dicePart.Name = tostring(math.random(1, 20))
+			wait(0.1)
+		end
+		local final = math.random(1, 20)
+		dicePart.Name = tostring(final)
+		rep.CharacterBios:FindFirstChild(plr.Name).LastRoll.Value = final
+		wait(3)
+		dicePart.Name = ""
+		rep.RollD20:FireClient(plr)
+	end
+end)
+
+function rep.OOCModeUpdate.OnServerInvoke(plr, mode)
+	local char = plr.Character
+	if char then
+		CharScan(char, mode)
+		local falseHead = FindFalseHumanoid(char)
+		if mode then
+			falseHead.Name = "[ OOC ]"
+		else
+			falseHead.Name = rep.CharacterBios:FindFirstChild(plr.Name).RPName.Value
+		end
+	end
+end
+
+function CharScan(item, mode)
+	for _,v in pairs(item:GetChildren()) do
+		if #item:GetChildren() > 0 then
+			CharScan(v, mode)
+		end
+	end
+	if (item.Name ~= "Head" and item.Name ~= "CollisionPart") and 
+		(item:IsA("BasePart") or item:IsA("UnionOperation") or item:IsA("MeshPart") or item:IsA("Decal")) then
+		if mode then
+			local oT = Instance.new("NumberValue")
+			oT.Value = item.Transparency
+			oT.Name = "StoredTransparency"
+			oT.Parent = item
+			item.Transparency = 0.95
+		elseif item:FindFirstChild("StoredTransparency") then
+			item.Transparency = item.StoredTransparency.Value
+			item.StoredTransparency:Destroy()
+		end
+	end
+end
+
+function rep.ClipboardUpdate.OnServerInvoke(plr, subjectName)
+	local subject = game.Players:FindFirstChild(subjectName)
+	if subject and subject.Character then
+		if dummyList[plr.Name] then
+			dummyList[plr.Name]:Destroy()
+		end
+		subject.Character.Archivable = true
+		local clo = subject.Character:Clone()
+		subject.Character.Archivable = false
+		clo.PrimaryPart.Anchored = true
+		clo:SetPrimaryPartCFrame(CFrame.new())
+		clo.Name = "Dummy"
+		dummyList[plr.Name] = clo
+		clo.Parent = work
+		rep.ClipboardUpdateGlobal:FireAllClients("New", plr.Name, clo, plr.Character:FindFirstChild("Hunter's Clipboard").Paper)
+	end
+end
+
+function rep.Weld.OnServerInvoke(plr, newWeldPart, variantName, weldName, currentWeld, newC0)
+	local char = plr.Character
+	if char then
+		local c0 = char:findFirstChild(variantName).PrimaryPart.CFrame:toObjectSpace(char.RightHand.CFrame):inverse()
+		currentWeld.Part0 = newWeldPart
+		currentWeld.Part1 = char:FindFirstChild(variantName).PrimaryPart
+		if newWeldPart.Name == "RightHand" then
+			newC0 = CFrame.new(0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -1, 0)
+		end
+		currentWeld.C0 = newC0
+		currentWeld.Name = weldName
+		currentWeld.Parent = currentWeld.Part0
+	end
+end
+
+rep.ToolSound.OnServerEvent:Connect(function(plr, baseName, variantName, soundName, isDirectName)
+	ToolSound(plr, baseName, variantName, soundName, isDirectName)
+end)
+
+function ToolSound(plr, baseName, variantName, soundName, isDirectName)
+	local char = plr.Character
+	if char then
+		local tool = char:FindFirstChild(variantName)
+		if tool and tool:IsA("Model") then
+			if not isDirectName then
+				soundName = FindToolSetting(baseName, variantName, soundName)
+			end
+			PlaySound(tool.Handle, "ToolSounds", soundName, 0, {95, 105}) --HANDLE NOT VALID MEMBER OF BOOLVALUE: 310 < 299
+		end
+	end
+end
+
+rep.ToolInteraction.OnServerEvent:Connect(function(plr, interaction, baseName, variantName, chamberState, isOffHand, extraSettings)
+	--throwable: extraSettings = {power, angle, type}
+	local char = plr.Character
+	if char then
+		local suffix = ""
+		if isOffHand then
+			suffix = "_OffHand"
+		end
+		local tool = char:FindFirstChild(variantName..suffix)
+		if tool and tool:IsA("Model") then
+			if string.find(interaction, "StabStart") then
+				tool.Blade.Trail.Enabled = true
+			elseif string.find(interaction, "StabStop") then
+				tool.Blade.Trail.Enabled = false
+			elseif interaction == "ActivateStart" then
+				tool.Handle.Smoke.Enabled = true
+				tool.Handle.Activate.PlaybackSpeed = math.random(95, 105) / 100
+				tool.Handle.Activate:Play()
+			elseif interaction == "ActivateStop" then
+				tool.Handle.Smoke.Enabled = false
+				tool.Handle.Activate:Stop()
+			elseif string.find(interaction, "PumpSlide") then
+				local offset = -0.3
+				if string.find(interaction, "In") then
+					offset = -offset
+					local originalColor = tool.Chamber.OriginalColor
+					if originalColor:IsA("Color3Value") then
+						tool.Chamber.Color = originalColor.Value
+					else
+						tool.Chamber.BrickColor = originalColor.Value
+					end
+				elseif chamberState ~= "Empty" then
+					tool.Chamber.Shell:Emit(1)
+					tool.Chamber.BrickColor = BrickColor.new("Really black")
+				end
+				local w = tool.Handle.Weld_Pump
+				w.C0 = w.C0 * CFrame.new(0, 0, offset)
+			elseif string.find(interaction, "Bow") then
+				if string.find(interaction, "Knock") then
+					for _,v in pairs(tool:GetChildren()) do
+						if v.Name == "Knocked" then
+							v.Transparency = 0
+						end
+					end
+				elseif string.find(interaction, "Draw") then
+					for _,v in pairs(tool.Drawn:GetChildren()) do
+						v.Transparency = 0
+					end
+					for _,v in pairs(tool.Loose:GetChildren()) do
+						v.Transparency = 1
+					end
+					for _,v in pairs(tool:GetChildren()) do
+						if v.Name == "Knocked" then
+							v.Transparency = 1
+						end
+					end
+					local w = tool.Handle.Weld_LeftBow
+					w.C1 = w.C1 * CFrame.Angles(0, math.rad(15), 0)
+					w = tool.Handle.Weld_RightBow
+					w.C1 = w.C1 * CFrame.Angles(0, math.rad(15), 0)
+				elseif string.find(interaction, "Loose") then
+					local w = tool.Handle.Weld_LeftBow
+					w.C1 = w.C1 * CFrame.Angles(0, math.rad(-15), 0)
+					w = tool.Handle.Weld_RightBow
+					w.C1 = w.C1 * CFrame.Angles(0, math.rad(-15), 0)
+					for _,v in pairs(tool.Drawn:GetChildren()) do
+						v.Transparency = 1
+					end
+					for _,v in pairs(tool.Loose:GetChildren()) do
+						v.Transparency = 0
+					end
+				end
+			elseif string.find(interaction, "PumpRotate") then
+				local rotation = 35
+				if string.find(interaction, "Up") then
+					rotation = -rotation
+				elseif chamberState ~= "Empty" then
+					tool.Chamber.Shell:Emit(1)
+				end
+				local w = tool.Handle.Weld_Pump
+				w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+			elseif string.find(interaction, "Pistol") then
+				local charge = tool:FindFirstChild("ChargeHandle")
+				local offset = 0.2
+				if string.find(interaction, "In") then
+					offset = -offset
+				elseif chamberState ~= "Empty" then
+					tool.Chamber.Shell:Emit(1)
+				end
+				local w = tool.Handle.Weld_Slide
+				w.C1 = w.C1 * CFrame.new(0, 0, offset)
+				if charge then
+					w = tool.Handle.Weld_ChargeHandle
+					w.C1 = w.C1 * CFrame.new(0, 0, offset)
+				end
+			elseif interaction == "Pickaxe Swing" then
+				CoroutineLauncher("MineWall", tool.Handle.Position, variantName, plr)
+			elseif string.find(interaction, "Grenade") then
+				if string.find(interaction, "Toss") then
+					for _,v in pairs(tool:GetChildren()) do
+						if v:IsA("Model") and v.PrimaryPart.Transparency == 0 then
+							for _,b in pairs(v:GetChildren()) do
+								b.Transparency = 1
+							end
+							break
+						end
+					end
+					CoroutineLauncher("PlaySound", tool.PrimaryPart, "ToolSounds", "SmallBladeSwing1", 0, {95, 105})
+					CoroutineLauncher("LaunchThrowable", tool.Handle.CFrame, extraSettings)
+				end
+			elseif string.find(interaction, "Cylinder") then
+				if string.find(interaction, "Empty") then
+					for _,v in pairs(tool.Swivel:GetChildren()) do
+						if v.name == "Chamber" then
+							v.Shell:Emit(1)
+						end
+					end
+					if FindToolSetting(baseName, variantName, "Setting_isDualWielded") then
+						for _,v in pairs(char:FindFirstChild(variantName.."_OffHand").Swivel:GetChildren()) do
+							if v.name == "Chamber" then
+								v.Shell:Emit(1)
+							end
+						end
+					end
+					CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", 
+						FindToolSetting(baseName, variantName, "Sound_empty"), 0, {95, 105})
+				else
+					local rotation, pitchRange = 65, {95, 105}
+					if string.find(interaction, "In") then
+						rotation, pitchRange = -rotation, {105, 115}
+					end
+					local w = tool.Handle.Weld_Swivel
+					w.C1 = w.C1 * CFrame.Angles(0, 0, math.rad(rotation))
+					if FindToolSetting(baseName, variantName, "Setting_isDualWielded") then
+						tool = char:FindFirstChild(variantName.."_OffHand")
+						w = tool.Handle.Weld_Swivel
+						w.C1 = w.C1 * CFrame.Angles(0, 0, math.rad(rotation))
+					end
+					CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", 
+						FindToolSetting(baseName, variantName, "Sound_cylinder"), 0, pitchRange)
+				end
+			elseif string.find(interaction, "Slide") then
+				local slide, shell, w = true, true, nil
+				if string.find(interaction, "NoChamber") then
+					slide = false
+				end
+				if string.find(interaction, "NoShell") then
+					shell = false
+				end
+				if slide then
+					w = tool.Handle.Weld_Slide
+					w.C1 = w.C1 * CFrame.new(0, 0, 0.2)
+				end
+				if shell then
+					tool.Chamber.Shell:Emit(1)
+				end
+				wait(0.1)
+				if slide then
+					w = tool.Handle.Weld_Slide
+					w.C1 = w.C1 * CFrame.new(0, 0, -0.2)
+				end
+			elseif interaction == "Empty" then
+				for _,v in pairs(tool:GetChildren()) do
+					if v.Name == "Magazine" or v.Name == "Bullet" then
+						v.Transparency = 1
+					end
+				end
+			elseif interaction == "Load" then
+				local isThrowable = baseName == "Throwables"
+				if not isThrowable then
+					for _,v in pairs(tool:GetChildren()) do
+						if v.Name == "Magazine" then
+							v.Transparency = 0
+						end
+					end
+				else
+					for _,v in pairs(tool:GetChildren()) do
+						if v:IsA("Model") then
+							for _,b in pairs(v:GetChildren()) do
+								b.Transparency = 1
+							end
+						end
+					end
+					local model = tool:FindFirstChild(extraSettings["Mode"])
+					for _,v in pairs(model:GetChildren()) do
+						v.Transparency = 0
+					end
+				end
+			elseif interaction == "Lid Open" then
+				local cap = tool:FindFirstChild("Cap")
+				if cap then
+					cap.Transparency = 1
+				end
+			elseif interaction == "Lid Close" then
+				local cap = tool:FindFirstChild("Cap")
+				if cap then
+					cap.Transparency = 0
+				end
+			elseif string.find(interaction, "Hammer") then
+				local rotation = 45
+				if string.find(interaction, "HammerIn") then
+					rotation = -rotation
+				end
+				if FindToolSetting(baseName, variantName, "Setting_isDualWielded") then
+					local hammer1, hammer2 = string.find(interaction, "1"), string.find(interaction, "2")
+					if hammer1 or hammer2 then
+						local w = tool.Handle.Weld_Hammer
+						w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+					else
+						local w = tool.Handle.Weld_Hammer
+						w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+						tool = char:FindFirstChild(variantName.."_OffHand")
+						w = tool.Handle.Weld_Hammer
+						w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+					end
+				end
+			elseif string.find(interaction, "Barrel") then
+				local rotation, pitchRange = -45, {105, 115}
+				if string.find(interaction, "Down") then
+					for _,v in pairs(tool.Swivel:GetChildren()) do
+						if v.Name == "Chamber" then
+							v.Shell:Emit(1)
+						end
+					end
+				else
+					rotation, pitchRange = -rotation, {115, 125}
+				end
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "BarrelToggle1", 0, pitchRange)
+				local swivel = tool:FindFirstChild("Swivel")
+				if not swivel then
+					print("Swivel not found in: ",tool:GetFullName())
+				end
+				local w = tool.Handle.Weld_Swivel
+				w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+			elseif string.find(interaction, "Cover") then
+				local rotation, soundName = -100, "RevolverEmpty1"
+				if interaction == "CoverDown" then
+					rotation, soundName = 100, "RevolverCylinder1"
+				end
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", soundName, 0, {95, 105})
+				local w = tool.Handle.Weld_Cover
+				w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+			elseif interaction == "BulletFeed" then
+				for _,v in pairs(tool:GetChildren()) do
+					if v.Name == "Bullet" then
+						v.Transparency = 0
+					end
+				end
+			elseif interaction == "VoidJar" then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "Void"..math.random(1,3), 0, {75, 125})
+			elseif interaction == "FartBlast" then
+				local omega = math.random(1,10)
+				local sound = "FartBlast"..math.random(1,4)
+				local pitchRange = {75, 125}
+				local vol = 1
+				if omega == 10 then
+					pitchRange = {25, 35}
+					vol = 10
+					tool.Top.Omega:Emit(100)
+				else
+					tool.Top.Smoke:Emit(40)
+				end
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", sound, 0, pitchRange, vol)
+				if (tool.Handle.CFrame.p - work.AncientTemple.FartGate.PrimaryPart.CFrame.p).magnitude < 10 then
+					rep.TempleDoorsUpdate_Client:FireClient(plr, work.AncientTemple.FartGate)
+					local gate = work.AncientTemple.FartGate
+					for _,v in pairs(gate:GetChildren()) do
+						v.Transparency = 0.5
+					end
+					wait(5)
+					for _,v in pairs(gate:GetChildren()) do
+						v.Transparency = 0
+					end
+				end
+			elseif interaction == "ARGBlast" then
+				local distance = 10
+				for _,point in pairs(argPoints) do
+					local mag = (point.CFrame.p - tool.Handle.CFrame.p).magnitude
+					if mag < distance then
+						CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "ARGGlitch", 0, {100,100}, 0.05)
+						if point.Type.Value == "Laptop" then
+							rep.ARGEvent:FireClient(plr, "Laptop")
+						elseif point.Type.Value == "Bunker" then
+							if plr.Character:FindFirstChild("checkValue") then
+								rep.ARGEvent:FireClient(plr, "Bunker", point.Model.Door)
+							end
+						elseif point.Type.Value == "Server" then
+							rep.ARGEvent:FireClient(plr, "Server")
+						end
+					else
+						CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "ARGDryFire", 0, {100,100}, 0.1)
+					end
+				end
+			elseif string.find(interaction, "Multinade") then
+				interaction = string.sub(interaction, 11, string.len(interaction))
+				for _,v in pairs(tool:GetChildren()) do
+					if v:IsA("Model") and v.PrimaryPart.Transparency == 0 then
+						for _,b in pairs(v:GetChildren()) do
+							b.Transparency = 1
+						end
+						break
+					end
+				end
+				for _,v in pairs(tool:FindFirstChild(interaction):GetChildren()) do
+					v.Transparency = 0
+				end
+			elseif interaction == "CameraPhoto" then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "CameraSound", 0, {97, 103}, 1, 0.375)
+				tool.Light.Material = Enum.Material.Neon
+				tool.Light.PointLight.Enabled = true
+				tool.Light.SpotLight.Enabled = true
+				tool.Light.Flash.Enabled = true
+				wait(0.1)
+				tool.Light.Material = Enum.Material.Ice
+				tool.Light.PointLight.Enabled = false
+				tool.Light.SpotLight.Enabled = false
+				tool.Light.Flash.Enabled = false
+			elseif interaction == "Light On" then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "ToggleButton1", 0, {95, 105})
+				for _,v in pairs(tool:GetChildren()) do
+					if v.Name == "Light" then
+						for _,v in pairs(v:GetChildren()) do
+							if v.Name == "Light" then
+								v.Enabled = true
+							end
+						end
+						v.BrickColor = BrickColor.new("White")
+						v.Material = Enum.Material.Neon
+					end
+				end
+			elseif interaction == "Light Off" then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "ToggleButton1", 0, {95, 105})
+				for _,v in pairs(tool:GetChildren()) do
+					if v.Name == "Light" or v.Name == "Laser" then
+						for _,v in pairs(v:GetChildren()) do
+							if v.Name == "Light" then
+								v.Enabled = false
+							end
+						end
+						v.BrickColor = BrickColor.new("Black")
+						v.Material = Enum.Material.Ice
+					elseif v.Name == "LaserBeam" then
+						v.Transparency = 1
+					end
+				end
+			elseif interaction == "Laser On" then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "ToggleButton1", 0, {95, 105})
+				for _,v in pairs(tool:GetChildren()) do
+					if v.Name == "Laser" then
+						for _,v in pairs(v:GetChildren()) do
+							if v.Name == "Light" then
+								v.Enabled = true
+							end
+						end
+						v.BrickColor = BrickColor.new("Bright red")
+						v.Material = Enum.Material.Neon
+					elseif v.Name == "Light" then
+						for _,v in pairs(v:GetChildren()) do
+							if v.Name == "Light" then
+								v.Enabled = false
+							end
+						end
+						v.BrickColor = BrickColor.new("Black")
+						v.Material = Enum.Material.Ice
+					elseif v.Name == "LaserBeam" then
+						v.Transparency = 0.8
+					end
+				end
+			elseif string.find(interaction, "Bipod") then
+				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", "RevolverCylinder1", 0, {95, 105}, 0.5)
+				local rotation = 90
+				if string.find(interaction, "Down") then
+					rotation = -90
+				end
+				local w = tool.Handle.Weld_Bipod1
+				w.C1 = w.C1 * CFrame.Angles(math.rad(-rotation), 0, 0)
+				w = tool.Handle.Weld_Bipod2
+				w.C1 = w.C1 * CFrame.Angles(math.rad(rotation), 0, 0)
+			end
+		end
+	end
+end)
+
+function FindToolSetting(baseName, variantName, itemName)
+	local toolHome = serv.Tools:FindFirstChild(baseName)
+	local toolItem = toolHome:FindFirstChild(variantName):FindFirstChild(itemName)
+	if not toolItem then
+		toolItem = toolHome:FindFirstChild(itemName)
+		if toolItem then
+			toolItem = toolItem.Value
+		else
+			toolItem = false
+		end
+	else
+		toolItem = toolItem.Value
+	end
+	return toolItem
+end
+local rsaFinal = game.ServerStorage.Codes.RSA.Value
+local numFinal = game.ServerStorage.Codes.Keycard.Value
+numKey = math.random(0,999999)
+game.Workspace.SuperPart.Name = numKey
+
+function rep.ValueFunc.OnServerInvoke(plr, mod, keyC)
+	if mod == "1" and tostring(keyC) == tostring(numKey) then
+		return rsaFinal
+	elseif mod == "2" and tostring(keyC) == tostring(numKey) then
+		return numFinal
+	end
+end
+rep.ARGEvent.OnServerEvent:Connect(function(plr, mod)
+	if mod == "RSAComplete" then
+		local checkValue = Instance.new("BoolValue", plr.Character)
+		checkValue.Name = "checkValue"
+	end
+end)
+
+function rep.ToolDisplayToggle.OnServerInvoke(plr, baseName, variantName, toolSlot)
+	local char = plr.Character
+	if char then
+		local tool = char:FindFirstChild(variantName)
+		if tool then
+			tool:Destroy()
+		else
+			LoadItem(plr, "ToolChange", baseName, variantName, toolSlot)
+		end
+	end
+end
+
+function rep.EquipTool.OnServerInvoke(plr, state, baseName, variantName, toolSlot)
+	local char = plr.Character
+	if char then
+		local models = {char:FindFirstChild(variantName), char:FindFirstChild(variantName.."_OffHand")}
+		if not models[1] and state == "Equip" and gameData[plr.Name]["Account"]["ToolsOwned"][variantName] then
+			models[1] = serv.Tools:FindFirstChild(baseName):FindFirstChild(variantName).Model:Clone()
+			models[1]:SetPrimaryPartCFrame(CFrame.new())
+			local holster = models[1]:FindFirstChild("Holster")
+			if holster then
+				holster:Destroy()
+			end
+			models[1].PrimaryPart = models[1].Handle
+			models[1].Name = variantName
+			local falseWeld = Instance.new("BoolValue")
+			falseWeld.Name = "PrimaryWeld"
+			falseWeld.Parent = models[1].PrimaryPart
+			WeldToolParts(models[1])
+			models[1].Parent = char
+		end
+		local newTool
+		if models[1] then
+			if state == "Equip" then
+				for i,model in pairs(models) do
+					if model then
+						local nameSuffix, weldPart, wName = "", char.RightHand, "HandleWeld"
+						if i == 2 then
+							nameSuffix, weldPart, wName = "_OffHand", char.LeftHand, "OffHandleWeld"
+						end
+						if model:IsA("Model") and model.PrimaryPart:FindFirstChild("PrimaryWeld") then
+							model.PrimaryPart.PrimaryWeld:Destroy()
+						else
+							local toolFolder = serv.Tools:FindFirstChild(baseName):FindFirstChild(variantName)
+							model = toolFolder:FindFirstChild("Model"..nameSuffix):Clone()
+							WeldToolParts(model)
+							model.Name = variantName..nameSuffix
+							char:FindFirstChild(variantName..nameSuffix):Destroy()
+							model.Parent = char
+						end
+						wait()
+						if model:IsA("Model") and model.PrimaryPart then
+							model:SetPrimaryPartCFrame(weldPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+						end
+						local w = Instance.new("Weld") 
+						w.Part0 = model.PrimaryPart
+						w.Part1 = weldPart
+						if not model.PrimaryPart then
+							print("Error: Failed to find model.PrimaryPart")
+							return
+						end
+						w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+						w.Name = wName
+						w.Parent = w.Part1
+						model.Parent = char
+						if i == 1 then
+							newTool = model
+							if model:FindFirstChild("Paper") and dummyList[plr.Name] then
+								rep.ClipboardUpdateGlobal:FireAllClients("Refresh", plr.Name, dummyList[plr.Name], 
+									plr.Character:FindFirstChild("Hunter's Clipboard").Paper)
+							end
+						end
+					end
+				end
+				if variantName == "Geiger Counter" then
+					newTool.Handle.Counter:Play()
+					CoroutineLauncher("GeigerCounter", newTool.Handle)
+				end
+				if string.find(baseName, "Melee") then
+					local idleSound = FindToolSetting(baseName, variantName, "Sound_idle")
+					local isContinuous = FindToolSetting(baseName, variantName, "Setting_isContinuous")
+					if idleSound then
+						local s = serv.ToolSounds:FindFirstChild(idleSound):Clone()
+						s.Parent = newTool.Handle
+						s.Name = "Idle"
+						s:Play()
+					end
+					if isContinuous then
+						local s = serv.ToolSounds:FindFirstChild(FindToolSetting(baseName, variantName, "Sound_activate")):Clone()
+						s.Name = "Activate"
+						s.Parent = newTool.Handle
+					end
+				end
+			elseif state == "Unequip" then
+				if gameData[plr.Name]["Server"]["Tools"][toolSlot]["Variant"] == variantName then
+					ToolFindAndCheck(plr.Name, char, baseName, variantName, toolSlot)
+				end
+			end
+		end
+	end
+end
+	
+function ToolFindAndCheck(plrName, char, baseName, variantName, toolSlot)
+	local lastToolName = gameData[plrName]["Server"]["Tools"][toolSlot]["Variant"]
+	local lastTool = char:FindFirstChild(lastToolName)
+	local lastOffHandTool = char:FindFirstChild(lastToolName.."_OffHand")
+	local effectSustained = false
+	if lastTool then
+		if lastTool:IsA("Model") and (baseName == "Lights" and FindToolSetting(baseName, variantName, "Setting_doesDisplay") and 
+			lastTool:FindFirstChild("Light") and lastTool.Light.Light.Enabled) then
+			effectSustained = true
+		end
+		lastTool:Destroy()
+		if lastOffHandTool then
+			lastOffHandTool:Destroy()
+		end
+		gameData[plrName]["Server"]["Tools"][toolSlot]["Base"] = "None"
+		gameData[plrName]["Server"]["Tools"][toolSlot]["Variant"] = "None"
+		for _,v in pairs(char:GetChildren()) do
+			if v:IsA("MeshPart") and v:FindFirstChild("HandleWeld") then
+				v.HandleWeld:Destroy()
+			end
+		end
+	end
+	local toolBase = serv.Tools:FindFirstChild(baseName)
+	if not toolBase then
+		for _,v in pairs(serv.Tools:GetChildren()) do
+			if v:FindFirstChild(variantName) then
+				toolBase = v
+				baseName = v.Name
+				break
+			end
+		end
+	end
+	local storedTool = toolBase:FindFirstChild(variantName)
+	if storedTool:FindFirstChild("Pass") or storedTool:FindFirstChild("LevelReq") or storedTool:FindFirstChild("Price") then
+		if gameData[plrName]["Account"]["ToolsOwned"][storedTool.Name] then
+			gameData[plrName]["Server"]["Tools"][toolSlot] = {Variant = variantName, Base = baseName}
+			local doesDisplay = FindToolSetting(baseName, variantName, "Setting_doesDisplay")
+			if (toolSlot == "Primary" or toolSlot == "Secondary") or doesDisplay then
+				WeldToHolster(char, storedTool, effectSustained)
+			else
+				local toolIsOwned = Instance.new("BoolValue")
+				toolIsOwned.Name = variantName
+				toolIsOwned.Parent = char
+				if storedTool:FindFirstChild("Model_OffHand") then
+					toolIsOwned = Instance.new("BoolValue")
+					toolIsOwned.Name = variantName.."_OffHand"
+					toolIsOwned.Parent = char
+				end
+			end
+			return true
+		end
+		gameData[plrName]["Server"]["Tools"][toolSlot] = {Variant = "None", Base = "None"}
+		return false
+	else
+		gameData[plrName]["Server"]["Tools"][toolSlot] = {Variant = variantName, Base = baseName}
+		local doesDisplay = FindToolSetting(baseName, variantName, "Setting_doesDisplay")
+		if (toolSlot == "Primary" or toolSlot == "Secondary") or doesDisplay then
+			WeldToHolster(char, storedTool, effectSustained)
+		else
+			local toolIsOwned = Instance.new("BoolValue")
+			toolIsOwned.Name = variantName
+			toolIsOwned.Parent = char
+			if storedTool:FindFirstChild("Model_OffHand") then
+				toolIsOwned = Instance.new("BoolValue")
+				toolIsOwned.Name = variantName.."_OffHand"
+				toolIsOwned.Parent = char
+			end
+		end
+		return true
+	end
+end
+
+function rep.LoadItem.OnServerInvoke(plr, interaction, input1, input2, input3)
+	return LoadItem(plr, interaction, input1, input2, input3)
+end
+
+function LoadItem(plr, interaction, input1, input2, input3)
+	--if loading tool: input1 = base name, input2 = variant name, input3 = tool slot
+	--if deleting tool: input1 = "None", input2 = variant name
+	--if loading morph: input1 = item name
+	local char = plr.Character
+	if char then
+		if string.find(interaction, "ToolChange") then
+			if input1 == "None" then
+				gameData[plr.Name]["Server"]["Tools"][input2] = {Variant = "None", Base = "None"}
+				local previousTool = char:FindFirstChild(input2)
+				if previousTool then
+					previousTool:Destroy()
+					local previousToolOffHand = char:FindFirstChild(input2.."_OffHand")
+					if previousToolOffHand then
+						previousToolOffHand:Destroy()
+					end
+				end
+				return true
+			end
+			return ToolFindAndCheck(plr.Name, char, input1, input2, input3)
+		elseif string.find(interaction, "MorphChange") then
+			if string.find(interaction, "Preset") then
+				if input1 ~= "None" then
+					local morph = serv.Morphs:FindFirstChild(input1)
+					local plrOwnsItem = true
+					if morph:FindFirstChild("Pass") then
+						if not gameData[plr.Name]["Account"]["MorphsOwned"][morph.Name] then
+							plrOwnsItem = false
+						end
+					end
+					if plrOwnsItem then
+						for _,v in pairs(char:GetChildren()) do
+							if string.find(v.Name, "Container") then
+								v:Destroy()
+							end
+						end
+						for i,v in pairs(bodyPartNames) do
+							local container = Instance.new("Folder")
+							container.Name = i.."Container"
+							container.Parent = char
+						end
+						local transparency = 0
+						for _,v in pairs(char.PrimaryPart:GetChildren()) do
+							if v:IsA("Sound") then
+								v:Stop()
+							end
+						end
+						local nonHumanoid = morph:FindFirstChild("NonHumanoid")
+						if nonHumanoid then
+							transparency = 1
+							if nonHumanoid.Value == "FlyingBot" then
+								char.PrimaryPart.FlyingBot_Hover:Play()
+							end
+						elseif char.PrimaryPart.FlyingBot_Hover.IsPlaying then
+							char.PrimaryPart.FlyingBot_Hover:Stop()
+						end
+						for _,v in pairs(char:GetChildren()) do
+							if containerNames[v.Name] then
+								local part = v
+								if v.Name == "Head" then
+									part = char.MeshHead
+									local face = part:FindFirstChild("face")
+									if face then
+										face.Transparency = transparency
+									end
+								end
+								part.Transparency = transparency
+							elseif v:IsA("Accessory") then
+								v.Handle.Transparency = transparency
+							end
+							if v:FindFirstChild("WeldPart") then
+								v:Destroy()
+							end
+						end
+						for _,item in pairs(morph:GetChildren()) do
+							if item:IsA("Folder") then
+								local trueName = string.sub(item.Name, 1, string.len(item.Name) - 5)
+								if containerNames[trueName] then
+									local container = char:FindFirstChild(containerNames[trueName].."Container")
+									local charWeldPart = char:FindFirstChild(trueName)
+									for _,part in pairs(item:GetChildren()) do
+										local clo = part:Clone()
+										local w = Instance.new('Weld')
+										w.Part0 = charWeldPart
+										w.Part1 = clo
+										w.C0 = morph:FindFirstChild(trueName).CFrame:inverse() * part.CFrame
+										w.Parent = charWeldPart
+										clo.Parent = container
+									end
+									if morph:FindFirstChild(containerNames[trueName].."Invisible") then
+										charWeldPart.Transparency = 1
+									end
+								else
+									local origin = morph:FindFirstChild(trueName)
+									local clo = origin:Clone()
+									local charWeldPart = char:FindFirstChild(clo.WeldPart.Value)
+									clo.CFrame = charWeldPart.CFrame
+									local m = Instance.new('Motor6D')
+									m.Part0 = charWeldPart
+									m.Part1 = clo
+									m.C0 = morph:FindFirstChild(origin.WeldPart.Value).CFrame:inverse() * origin.CFrame
+									m.Parent = charWeldPart
+									clo.Parent = char
+									local container = Instance.new("Folder")
+									container.Name = trueName.."Container"
+									container.Parent = char
+									for _,part in pairs(item:GetChildren()) do
+										local charWeldPart = char:FindFirstChild(trueName)
+										local clo = part:Clone()
+										local w = Instance.new('Weld')
+										w.Part0 = charWeldPart
+										w.Part1 = clo
+										w.C0 = morph:FindFirstChild(trueName).CFrame:inverse() * part.CFrame
+										w.Parent = charWeldPart
+										clo.Parent = container
+									end
+								end
+								if containerNames[trueName] then
+									gameData[plr.Name]["Server"]["Equipment"][containerNames[trueName]] = morph.Name
+								end
+							end
+						end
+						for _,container in pairs(char:GetChildren()) do
+							if container:IsA("Folder") and string.find(container.Name, "Container") then
+								for _,part in pairs(container:GetChildren()) do
+									local beam = part:FindFirstChild("Beam")
+									if beam then
+										local jointName = string.sub(part.Name, 1, string.len(part.Name) - 1)
+										beam.Attachment1 = container:FindFirstChild(jointName.."2").A1
+									end
+								end
+							end
+						end
+						if nonHumanoid then
+							char.HumanState.Value = "NonHumanoid"
+						end
+						return true
+					else
+						return false
+					end
+				else
+					for _,v in pairs(char:GetChildren()) do
+						if string.find(v.Name, "Container") then
+							v:Destroy()
+						end
+					end
+					for i,v in pairs(bodyPartNames) do
+						local container = Instance.new("Folder")
+						container.Name = i.."Container"
+						container.Parent = char
+					end
+					for _,v in pairs(char:GetChildren()) do
+						if containerNames[v.Name] then
+							gameData[plr.Name]["Server"]["Equipment"][containerNames[v.Name]] = "None"
+							local part = v
+							if v.Name == "Head" then
+								part = char.MeshHead
+								local face = part:FindFirstChild("face")
+								if face then
+									face.Transparency = 0
+								end
+							end
+							part.Transparency = 0
+						elseif v:IsA("Accessory") then
+							v.Handle.Transparency = 0
+						end
+					end
+					return true
+				end
+			else
+				local trueName = string.sub(interaction, 13, string.len(interaction))
+				local previousContainer = char:FindFirstChild(trueName.."Container")
+				if previousContainer then
+					local cName = string.sub(previousContainer.Name, 1, string.len(previousContainer.Name) - 9)
+					previousContainer:Destroy()
+					for _,v in pairs(bodyPartNames[cName]) do
+						if v == "Head" then
+							v = "MeshHead"
+						end
+						char:FindFirstChild(v).Transparency = 0
+					end
+				end
+				if input1 ~= "None" then
+					local container = Instance.new("Folder")
+					container.Name = trueName.."Container"
+					local morph = serv.Morphs:FindFirstChild(input1)
+					local plrOwnsItem = true
+					if morph:FindFirstChild("Pass") then
+						if not gameData[plr.Name]["Account"]["MorphsOwned"][morph.Name] then
+							plrOwnsItem = false
+						end
+					end
+					if plrOwnsItem then
+						for _,v in pairs(bodyPartNames[trueName]) do
+							local folder = morph:FindFirstChild(v.."Parts")
+							if folder then
+								local charWeldPart = char:FindFirstChild(v)
+								for _,part in pairs(folder:GetChildren()) do
+									local clo = part:Clone()
+									local w = Instance.new('Weld')
+									w.Part0 = charWeldPart
+									w.Part1 = clo
+									w.C0 = morph:FindFirstChild(v).CFrame:inverse() * part.CFrame
+									w.Parent = charWeldPart
+									clo.Parent = container
+								end
+								if morph:FindFirstChild(trueName.."Invisible") then
+									charWeldPart.Transparency = 1
+								end
+							end
+						end
+						for _,part in pairs(container:GetChildren()) do
+							local beam = part:FindFirstChild("Beam")
+							if beam then
+								local jointName = string.sub(part.Name, 1, string.len(part.Name) - 1)
+								beam.Attachment1 = container:FindFirstChild(jointName.."2").A1
+							end
+						end
+						container.Parent = char
+						gameData[plr.Name]["Server"]["Equipment"][trueName] = morph.Name
+						RestructureHumanoid(char, morph, container)
+						return true
+					else
+						return false
+					end
+				else
+					gameData[plr.Name]["Server"]["Equipment"][trueName] = "None"
+					RestructureHumanoid(char)
+					return true
+				end
+			end
+		elseif interaction == "NameChange" then
+			local newName = Chat:FilterStringAsync(input1, plr, plr)
+			local falseHead = FindFalseHumanoid(char)
+			falseHead.Name = newName
+			rep.CharacterBios:FindFirstChild(plr.Name).RPName.Value = newName
+			gameData[plr.Name]["Server"]["RPName"] = newName
+			return newName
+		elseif interaction == "BioChange" then
+			local newBio = Chat:FilterStringAsync(input1, plr, plr)
+			rep.CharacterBios:FindFirstChild(plr.Name).Value = newBio
+			gameData[plr.Name]["Server"]["Bio"] = newBio
+			return newBio
+		elseif interaction == "ShirtChange" then
+			local shirt = char:FindFirstChild("Shirt")
+			if shirt then
+				local shirtInStorage = false
+				if not serv.PlayerClothes.Shirts:FindFirstChild(plr.Name) then
+					for _,v in pairs(serv.Shirts:GetChildren()) do
+						if v.ShirtTemplate == shirt.ShirtTemplate then
+							shirtInStorage = true
+							break
+						end
+					end
+				else
+					shirtInStorage = true
+				end
+				if not shirtInStorage then
+					local storage = Instance.new("StringValue")
+					storage.Value = shirt.ShirtTemplate
+					storage.Name = plr.Name
+					storage.Parent = serv.PlayerClothes.Shirts
+				end
+				shirt:Destroy()
+			end
+			local plrShirt = serv.PlayerClothes.Shirts:FindFirstChild(plr.Name)
+			if plrShirt then
+				if input1 == "Custom" then
+					shirt = Instance.new("Shirt")
+					shirt.ShirtTemplate = plrShirt.Value
+					shirt.Name = "Shirt"
+					shirt.Parent = char
+					gameData[plr.Name]["Server"]["Shirt"] = "Custom"
+				elseif string.find(input1, "://") then
+					shirt = Instance.new("Shirt")
+					shirt.ShirtTemplate = input1
+					shirt.Name = "Shirt"
+					shirt.Parent = char
+					gameData[plr.Name]["Server"]["Shirt"] = "Loaded"
+				else
+					shirt = serv.Shirts:FindFirstChild(input1):Clone()
+					shirt.Name = "Shirt"
+					shirt.Parent = char
+					gameData[plr.Name]["Server"]["Shirt"] = input1
+				end
+			end
+		elseif interaction == "PantsChange" then
+			local pants = char:FindFirstChild("Pants")
+			if pants then
+				local pantsInStorage = false
+				if not serv.PlayerClothes.Pants:FindFirstChild(plr.Name) then
+					for _,v in pairs(serv.Pants:GetChildren()) do
+						if v.PantsTemplate == pants.PantsTemplate then
+							pantsInStorage = true
+							break
+						end
+					end
+				end
+				if not pantsInStorage then
+					local storage = Instance.new("StringValue")
+					storage.Value = pants.PantsTemplate
+					storage.Name = plr.Name
+					storage.Parent = serv.PlayerClothes.Pants
+				end
+				pants:Destroy()
+			end
+			local plrPants = serv.PlayerClothes.Pants:FindFirstChild(plr.Name)
+			if plrPants then
+				if input1 == "Custom" then
+					pants = Instance.new("Pants")
+					pants.PantsTemplate = plrPants.Value
+					pants.Name = "Pants"
+					pants.Parent = char
+					gameData[plr.Name]["Server"]["Pants"] = "Custom"
+				elseif string.find(input1, "://") then
+					pants = Instance.new("Pants")
+					pants.PantsTemplate = input1
+					pants.Name = "Pants"
+					pants.Parent = char
+					gameData[plr.Name]["Server"]["Pants"] = "Loaded"
+				else
+					pants = serv.Pants:FindFirstChild(input1):Clone()
+					pants.Name = "Pants"
+					pants.Parent = char
+					gameData[plr.Name]["Server"]["Pants"] = input1
+				end
+			end
+		elseif interaction == "AddAccessory" then
+			if not input1 or (input1 and bannedAccessoryList["id"..input1]) then
+				return false
+			end
+			local newAccessory = InsertService:LoadAsset(input1)
+			local item = newAccessory:FindFirstChildOfClass("Accessory")
+			if not item then
+				return false
+			end
+			if not item.Handle:FindFirstChild("Mesh") then
+				item.Handle.SpecialMesh.Name = "Mesh"
+			end
+			for _,v in pairs(newAccessory:GetChildren()) do
+				for _,n in pairs(char:GetChildren()) do
+					if n:IsA("Accessory") and n.Handle.Mesh.MeshId == v.Handle.Mesh.MeshId then
+						newAccessory:Destroy()
+						return false
+					end
+				end
+				break
+			end
+			item.Parent = serv
+			newAccessory:Destroy()
+			newAccessory = item
+			newAccessory.Handle.CanCollide = false
+			local originalId = Instance.new("NumberValue")
+			originalId.Name = "OriginalId"
+			originalId.Value = input1
+			originalId.Parent = newAccessory.Handle.Mesh
+			gameData[plr.Name]["Server"]["Accessories"]["id"..input1] = {Name = newAccessory.Name, Object = newAccessory}
+			char.Humanoid:AddAccessory(newAccessory)
+			return newAccessory
+		elseif interaction == "RemoveAccessory" then
+			for _,v in pairs(char:GetChildren()) do
+				if v:IsA("Accessory") and v == input1 then
+					gameData[plr.Name]["Server"]["Accessories"]["id"..v.Handle.Mesh.OriginalId.Value] = nil
+					v:Destroy()
+					return true
+				end
+			end
+			return false
+		elseif string.find(interaction, "AccessoryChange") then
+			if string.find(interaction, "ResetId") then
+				local ot = input1.Handle.Mesh:FindFirstChild("OriginalTexture")
+				if ot then
+					input1.Handle.Mesh.TextureId = ot.Value
+					gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value]["Texture"] = nil
+				end
+			elseif string.find(interaction, "SetId") then
+				if not input1.Handle.Mesh:FindFirstChild("OriginalTexture") then
+					local ot = Instance.new("StringValue")
+					ot.Name = "OriginalTexture"
+					ot.Value = input1.Handle.Mesh.TextureId
+					ot.Parent = input1.Handle.Mesh
+				end
+				input1.Handle.Mesh.TextureId = "rbxassetid://"..input2
+				gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value]["Texture"] = input2
+			elseif string.find(interaction, "ResetColor") then
+				input1.Handle.Mesh.VertexColor = Vector3.new(1, 1, 1)
+				local t = gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value]["Texture"]
+				for _,v in pairs({"r", "g", "b"}) do
+					gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value][v] = nil
+				end
+			elseif string.find(interaction, "SetColor") then
+				input1.Handle.Mesh.VertexColor = input2
+				local t = gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value]["Texture"]
+				for i,v in pairs({r = "X", g = "Y", b = "Z"}) do
+					gameData[plr.Name]["Server"]["Accessories"]["id"..input1.Handle.Mesh.OriginalId.Value][i] = input2[v]
+				end
+			end
+		elseif string.find(interaction, "BodyColorChange") then
+			if string.find(interaction, "SetColor") then
+				if not char.Humanoid:FindFirstChild("OriginalColor") then
+					local oc = Instance.new("Color3Value")
+					oc.Name = "OriginalColor"
+					oc.Value = char.MeshHead.Color
+					oc.Parent = char.Humanoid
+				end
+				local newColor = Color3.new(input1["r"], input1["g"], input1["b"])
+				for _,v in pairs(char:GetChildren()) do
+					if containerNames[v.Name] then
+						v.Color = newColor
+					end
+				end
+				gameData[plr.Name]["Server"]["BodyColor"] = input1
+				char.MeshHead.Color = newColor
+			elseif string.find(interaction, "ResetColor") then
+				local color = char.Humanoid:FindFirstChild("OriginalColor")
+				if color then
+					for _,v in pairs(char:GetChildren()) do
+						if containerNames[v.Name] then
+							v.Color = color.Value
+						end
+					end
+					char.MeshHead.Color = color.Value
+					gameData[plr.Name]["Server"]["BodyColor"] = color.Value
+				end
+			end
+		end
+	end
+end
+	
+function RestructureHumanoid(char, morph, ignore)
+	local lastHumanState = char.HumanState.Value
+	local nextHumanState = "Humanoid"
+	local transparency = 0
+	if morph and morph:FindFirstChild("NonHumanoid") then
+		transparency = 1
+		nextHumanState = "NonHumanoid"
+	elseif lastHumanState == "NonHumanoid" then
+		for _,v in pairs(char:GetChildren()) do
+			if v ~= ignore and string.find(v.Name, "Container") then
+				v:Destroy()
+			end
+		end
+		char.HumanState.Value = "Humanoid"
+	end
+	for _,v in pairs(char.PrimaryPart:GetChildren()) do
+		if v:IsA("Sound") and v.IsPlaying then
+			v:Stop()
+		end
+	end
+	if nextHumanState ~= lastHumanState then
+		for _,v in pairs(char:GetChildren()) do
+			local cName = containerNames[v.Name]
+			if cName then
+				local part = v
+				if part.Name == "Head" then
+					part = char.MeshHead
+					local face = part:FindFirstChild("face")
+					if face then
+						face.Transparency = transparency
+					end
+				end
+				local changeTransparency = true
+				if morph and morph:FindFirstChild(cName.."Invisible") and char:FindFirstChild(cName.."Container") then
+					changeTransparency = false
+				end
+				if changeTransparency then
+					part.Transparency = transparency
+				end
+			elseif v:IsA("Accessory") then
+				v.Handle.Transparency = transparency
+			end
+		end
+	end
+end
+	
+local vehicleLightSettings = {
+	Light_White = {
+		On = {Color = BrickColor.new("White"), Material = Enum.Material.Neon, LightOn = true},
+		Off = {Color = BrickColor.new("Dark stone grey"), Material = Enum.Material.Ice, LightOn = false}},
+	Light_Yellow = {
+		On = {Color = BrickColor.new("Bright yellow"), Material = Enum.Material.Neon, LightOn = true},
+		Off = {Color = BrickColor.new("CGA brown"), Material = Enum.Material.Ice, LightOn = false}},
+	Light_Red = {
+		On = {Color = BrickColor.new("Cocoa"), Material = Enum.Material.Neon, LightOn = true},
+		Off = {Color = BrickColor.new("Cocoa"), Material = Enum.Material.Ice, LightOn = false},
+		Reverse = {Color = BrickColor.new("Bright red"), Material = Enum.Material.Neon, LightOn = true}},
+	On = true,
+	Off = false
+}
+
+local seatConnections = {}
+function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
+	local char = plr.Character
+	if char and char.Parent then
+		if item1 == "Delete" then
+			for i,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+				if v:FindFirstChild("Chassis") then
+					table.remove(gameData[plr.Name]["Server"]["PropsPlaced"], i)
+					v:Destroy()
+					if seatConnections[plr.Name] then
+						seatConnections[plr.Name][2]:Disconnect()
+						seatConnections[plr.Name] = nil
+					end
+					break
+				end
+			end
+			return true
+		elseif item1 == "Toggle Lights" then
+			local vehicle
+			for _,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+				if v:FindFirstChild("Chassis") then
+					vehicle = v
+					break
+				end
+			end
+			if vehicle then
+				if vehicle.BodyKit.Light_White.Material == mat.Neon then
+					ChangeLights(vehicle.BodyKit, {Light_White = true, Light_Yellow = true, Light_Red = true}, "Off")
+				else
+					ChangeLights(vehicle.BodyKit, {Light_White = true, Light_Yellow = true, Light_Red = true}, "On")
+					if vehicle.Chassis.VehicleSeat.Throttle == -1 then
+						ChangeLights(vehicle.BodyKit, {Light_Red = true}, "Reverse")
+					end
+				end
+			end
+		else
+			for i,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+				if v:FindFirstChild("Chassis") then
+					table.remove(gameData[plr.Name]["Server"]["PropsPlaced"], i)
+					v:Destroy()
+					break
+				end
+			end
+			local vehicleName, vehicleColor = item1, item2
+			local vehicle = game.ServerStorage.Vehicles:FindFirstChild(vehicleName):Clone()
+			local timeStamp = Instance.new("NumberValue")
+			timeStamp.Name = "TimeStamp"
+			timeStamp.Parent = vehicle.BodyKit
+			timeStamp.Value = item3
+			timeStamp = Instance.new("NumberValue")
+			timeStamp.Name = "TimeStamp"
+			timeStamp.Parent = vehicle.BodyKit.Color
+			timeStamp.Value = item3
+			for _,v in pairs(vehicle:GetChildren()) do
+				if string.find(v.Name, "Weld") then
+					local weldBase = vehicle.Chassis:FindFirstChild(string.sub(v.Name, 6, string.len(v.Name)))
+					for _,b in pairs(v:GetChildren()) do
+						local w = Instance.new("Weld") 
+						w.Part0 = b 
+						w.Part1 = weldBase
+						w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+						w.Parent = w.Part1
+					end
+				elseif v.Name == "BodyKit" then
+					for _,b in pairs(v:GetChildren()) do
+						if b:IsA("Model") then
+							for _,n in pairs(b:GetChildren()) do
+								if n:IsA("BasePart") or n:IsA("UnionOperation") then
+									local w = Instance.new("Weld") 
+									w.Part0 = n
+									w.Part1 = vehicle.Chassis.PrimaryWeld
+									w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+									w.Parent = w.Part1
+									if b.Name == "Color" then
+										n.BrickColor = vehicleColor
+									end
+								elseif n.Name == "Owner" then
+									n.Value = plr.Name
+								end
+							end
+						elseif b:IsA("BasePart") then
+							local w = Instance.new("Weld") 
+							w.Part0 = b 
+							w.Part1 = vehicle.Chassis.PrimaryWeld
+							w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+							w.Parent = w.Part1
+						elseif b.Name == "Owner" then
+							b.Value = plr.Name
+						end
+					end
+				end
+			end
+			Scan(vehicle.BodyKit)
+			local seat = vehicle.Chassis.VehicleSeat
+			local chassis, accel = vehicle.Chassis, seat.acceleration.Value
+			chassis.A.Motor.MotorMaxTorque = accel
+			chassis.AA.Motor.MotorMaxTorque = accel
+			chassis.B.Motor.MotorMaxTorque = accel
+			chassis.BB.Motor.MotorMaxTorque = accel
+			seatConnections[plr.Name] = {chassis, seat.Changed:Connect(function(property)
+				if property == "Occupant" then
+					local human = seat.Occupant
+					local primaryWeld = chassis:FindFirstChild("PrimaryWeld")
+					if human --[[and human.Parent:FindFirstChild("Torso")]] and primaryWeld then
+						if human.Parent.MeshHead.Transparency == 1 then
+							human.Health = 0
+							return
+						end
+						--human.Parent.CollisionPart.Name = "CollisionPart"
+						seat.speed.Value = 0
+						primaryWeld.Stopping:Stop()
+						primaryWeld.Starting:Play()
+						wait(1.4)
+						ChangeLights(vehicle.BodyKit, {Light_White = true, Light_Yellow = true, Light_Red = true}, "On")
+						primaryWeld.Running:Play()
+						seat.speed.Value = seat.defaultSpeed.Value
+					else
+						seat.speed.Value = 0
+						ChangeLights(vehicle.BodyKit, {Light_White = true, Light_Yellow = true, Light_Red = true}, "Off")
+						primaryWeld.Starting:Stop()
+						primaryWeld.Running:Stop()
+						primaryWeld.Stopping:Play()
+						wait(primaryWeld.Stopping.TimeLength)
+					end
+				elseif property == "Throttle" then
+					if vehicle.BodyKit.Light_Red.Material == mat.Neon then
+						local lightStr = ""
+						if seat.Throttle == -1 then
+							lightStr = "Reverse"
+						elseif seat.Throttle ~= -1 then
+							lightStr = "On"
+						end
+						ChangeLights(vehicle.BodyKit, {Light_Red = true}, lightStr)
+					end
+				end
+			end)}
+			vehicle:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.new(0, 10, -20))
+			table.insert(gameData[plr.Name]["Server"]["PropsPlaced"], vehicle)
+			vehicle.Parent = game.Workspace
+			return true
+		end
+	end
+end
+
+function ChangeLights(bodykit, lightList, setting)
+	for _,part in pairs(bodykit:GetChildren()) do
+		if string.find(part.Name, "Light") then
+			local lName = part.Name
+			if lightList[lName] then
+				local lightSetting = vehicleLightSettings[lName][setting]
+				part.Material = lightSetting["Material"]
+				part.BrickColor = lightSetting["Color"]
+				if part:FindFirstChild("Light") then
+					part.Light.Enabled = lightSetting["LightOn"]
+				end
+			end
+		end
+	end
+end
+
+rep.Headwear.OnServerEvent:Connect(function(plr, state)
+	local char = plr.Character
+	if char then
+		if state == "All" then
+			if char:FindFirstChild("HeadContainer") then
+				for _,v in pairs(char.HeadContainer:GetChildren()) do
+					local storedT = v:FindFirstChild("StoredTransparency")
+					if storedT then
+						v.Transparency = storedT.Value
+					end
+				end
+			end
+			for _,v in pairs(char:GetChildren()) do
+				if v:IsA("Accessory") then
+					v.Handle.Transparency = 0
+				end
+			end
+		elseif state == "Helmet Only" then
+			for _,v in pairs(char:GetChildren()) do
+				if v:IsA("Accessory") then
+					v.Handle.Transparency = 1
+				end
+			end
+		else
+			if char:FindFirstChild("HeadContainer") then
+				for _,v in pairs(char.HeadContainer:GetChildren()) do
+					v.Transparency = 1
+				end
+			end
+			for _,v in pairs(char:GetChildren()) do
+				if v:IsA("Accessory") then
+					v.Handle.Transparency = 0
+				end
+			end
+		end
+	end
+end)	
+	
+rep.Metavision.OnServerEvent:Connect(function(plr, newMode)
+	local bio = rep.CharacterBios:FindFirstChild(plr.Name)
+	bio.LastMeta.Value = tostring(os.time())
+	bio.ToggleMeta.Value = newMode
+end)
+		
+rep.ProjectileFire.OnServerEvent:Connect(function(plr, baseName, variantName, configName, hitPositions, tip, isOffHand)
+	local char = plr.Character
+	if char then
+		local tool
+		local suffix = ""
+		if isOffHand then
+			suffix = "_OffHand"
+		end
+		for _,v in pairs(gameData[plr.Name]["Server"]["Tools"]) do
+			if v["Variant"] == configName then
+				tool = char:FindFirstChild(configName..suffix)
+				break
+			end
+		end
+		if tool then
+			local activateSound = FindToolSetting(baseName, variantName, "Sound_activate")
+			CoroutineLauncher("GunFlash", tip, activateSound, hitPositions, baseName, variantName)
+		end
+	end
+end)
+
+function GunFlash(part, activateSound, hitPositions, baseName, variantName)
+	local hitPos = hitPositions["HitData"][1]["HitPos"]
+	CoroutineLauncher("PlaySound", part, "ToolSounds", activateSound, 0, {95, 105})
+	if variantName == "AKIRA-18" or variantName == "NLR" then
+		CoroutineLauncher("ParticleEffect", "LaserImpact", CFrame.new(hitPos, part.CFrame.p), "Emission", 30)
+	elseif variantName == "Virtual:Smoke_Launcher" or variantName == "M32 Smoke" then
+		if variantName == "Virtual:Smoke_Launcher" then
+			part = part.Parent.SecondaryTip
+		end
+		CoroutineLauncher("SmokeGrenade", CFrame.new(hitPos, part.CFrame.p))
+	elseif variantName == "Virtual:Shockbreach" then
+		part = part.Parent.SecondaryTip
+		GenerateTargetedLightning(part.CFrame.p, hitPositions["HitData"][1]["HitPos"])
+		return
+	end
+	for _,v in pairs(part:GetChildren()) do
+		if v:IsA("ParticleEmitter") then
+			v:Emit(5)
+		end
+	end
+	if part:FindFirstChild("Flash") then
+		CoroutineLauncher("FlashEffect", part)
+	end
+	local shotType = FindToolSetting(baseName, variantName, "Setting_shotType")
+	for i,v in pairs(gameData) do
+		local plr = game.Players:FindFirstChild(i)
+		if plr and v["Server"]["BulletTrails"] then
+			rep.ProjectileTrail:FireClient(plr, hitPositions, shotType)
+		end
+	end
+end
+
+function rep.ToggleBulletTrail.OnServerInvoke(plr, setting)
+	gameData[plr.Name]["Server"]["BulletTrails"] = setting
+end
+
+function LaunchThrowable(startCF, power, angle, mode, target)
+	local throwable = serv.Throwables:FindFirstChild(mode):Clone()
+	throwable:SetPrimaryPartCFrame(startCF)
+	WeldToolParts(throwable)
+	throwable.PrimaryPart.Velocity = (CFrame.new(startCF.p * Vector3.new(1, 0, 1), target * Vector3.new(1, 0, 1)) * 
+		CFrame.Angles(math.rad(angle), 0, 0)).LookVector * power
+	throwable.PrimaryPart.RotVelocity = Vector3.new(math.random(), math.random(), math.random())
+	throwable.Parent = work
+	wait(4)
+	throwable.PrimaryPart.Anchored = true
+	throwable.PrimaryPart.Transparency = 1
+	for _,v in pairs(throwable:GetChildren()) do
+		if v ~= throwable.PrimaryPart then
+			v:Destroy()
+		end
+	end
+	if mode == "Frag" then
+		CoroutineLauncher("PlaySound", throwable.PrimaryPart, "ToolSounds", "ThrowableFragNear1", 0, {95, 105})
+		CoroutineLauncher("PlaySound", throwable.PrimaryPart, "ToolSounds", "ThrowableFragFar1", 0, {95, 105})
+		throwable.PrimaryPart.Blast:Emit(35)
+		throwable.PrimaryPart.Dust:Emit(20)
+		wait(10)
+		throwable:Destroy()
+	elseif mode == "Smoke" then
+		CoroutineLauncher("SmokeGrenade", throwable.PrimaryPart.CFrame)
+	elseif mode == "Flash" then
+		CoroutineLauncher("PlaySound", throwable.PrimaryPart, "ToolSounds", "ThrowableFragFar1", 0, {95, 105})
+		throwable.PrimaryPart.Blast:Emit(20)
+		throwable.PrimaryPart.Dust:Emit(10)
+		wait(10)
+		throwable:Destroy()
+	end
+end
+
+function SmokeGrenade(cf)
+	local g = serv.Particles.SmokeGrenade:Clone()
+	g.CFrame = cf
+	g.Parent = work
+	CoroutineLauncher("PlaySound", g, "ToolSounds", "ThrowableFragFar1", 0, {95, 105})
+	g.Blast:Emit(10)
+	wait(15)
+	g.Smoke.Enabled = false
+	wait(4)
+	g:Destroy()
+end
+
+function rep.OmnitoolCommand.OnServerInvoke(plr, command, input)
+	if string.find(command, ":") then
+		return
+	end
+	if gameData[plr.Name]["Server"]["ATFABRank"] >= 200 or (game.PrivateServerId and game.PrivateServerOwnerId == plr.UserId) then
+		if command == "change_time" then
+			if input == "freeze" then
+				omniToolProcess["Time"] = true
+			elseif input == "run" then
+				omniToolProcess["Time"] = false
+			else
+				omniToolProcess["Time"] = true
+				local startTime = tick()
+				local start = tonumber(string.sub(light.TimeOfDay, 1, 2)..string.sub(light.TimeOfDay, 4, 5))
+				if input < start then
+					input = input + 2400
+				end
+				local cycleTime = (input - start) * 0.01
+				local elapsedSeconds = 0
+				while elapsedSeconds < cycleTime do
+					wait()
+					elapsedSeconds = tick() - startTime
+					local newTime = math.floor(start + ((input - start) * (elapsedSeconds / cycleTime)))
+					local newHour = (newTime * 0.01) - ((newTime * 0.01) % 1)
+					local newMinute = ((newTime * 0.01) % 1) * 60
+					newMinute = math.min((newMinute - (newMinute % 1)), 60)
+					light.TimeOfDay = tostring(newHour)..":".. tostring(newMinute)..":00"
+				end
+				omniToolProcess["Time"] = true
+			end
+		elseif command == "change_weather" then
+			omniToolProcess["Weather"] = true
+			local _,_,wMode, wIntensity = string.find(input, "(%w+)_(%w+)")
+			if not wMode and string.find(input, "clear") then
+				wMode = "clear"
+			end
+			if input ~= "default" then
+				if wMode ~= "clear" and (currentWeather == "Clear" or currentWeather == "Stormfront") then
+					if wMode == "sandstorm" then
+						rep.WeatherUpdate:FireAllClients("Sandstorm")
+						BlendWeather("Clear_Sandstorm", wMode, wIntensity)
+					else
+						BlendWeather("Clear_Stormfront", wMode, wIntensity)
+						BlendWeather("Stormfront_Inclement", wMode, wIntensity)	
+					end
+				elseif wMode == "clear" and currentWeather ~= "Clear" then
+					if currentWeather == "Sandstorm" then
+						BlendWeather("Sandstorm_Clear", wMode, wIntensity)
+					else
+						BlendWeather("Inclement_Stormfront", wMode, wIntensity)
+						BlendWeather("Stormfront_Clear", wMode, wIntensity)
+					end
+					rep.WeatherUpdate:FireAllClients("Clear")
+				elseif wMode ~= "clear" and (currentWeather ~= "Stormfront" and currentWeather ~= "Clear") then
+					if currentWeather == "Sandstorm" and wMode ~= "sandstorm" then
+						BlendWeather("Sandstorm_Clear", wMode, wIntensity)
+						BlendWeather("Clear_Stormfront", wMode, wIntensity)
+					elseif string.lower(currentWeather) ~= string.lower(wMode) then
+						BlendWeather("Inclement_Stormfront", wMode, wIntensity)
+					end
+					if wMode == "sandstorm" then
+						if currentWeather ~= "Sandstorm" then
+							BlendWeather("Stormfront_Clear", wMode, wIntensity)
+							rep.WeatherUpdate:FireAllClients("Sandstorm")
+						end
+						BlendWeather("Clear_Sandstorm", wMode, wIntensity)
+					else
+						BlendWeather("Stormfront_Inclement", wMode, wIntensity)
+					end
+				end
+			else
+				if uCurrentWeather == currentWeather then
+					RestoreWeatherValue()
+				else
+					if uCurrentWeather == "Clear" then
+						if currentWeather ~= "Stormfront" and currentWeather ~= "Sandstorm" then
+							BlendWeather("Inclement_Stormfront", "clear", 1)
+							BlendWeather("Stormfront_Clear", "clear", 1)
+						elseif currentWeather == "Sandstorm" then
+							BlendWeather("Sandstorm_Clear", "clear", 1)
+						else
+							BlendWeather("Stormfront_Clear", "clear", 1)
+						end
+						weather = uWeather
+						rep.GlobalWeather.Severity.Value = weather
+					elseif uCurrentWeather == "Stormfront" then
+						if currentWeather == "Clear" then
+							BlendWeather("Clear_Stormfront", wMode, wIntensity)
+							RestoreWeatherValue()
+						elseif currentWeather == "Sandstorm" then
+							BlendWeather("Sandstorm_Clear", "stormfront", 0)
+							rep.WeatherUpdate:FireAllClients("Clear")
+							RestoreWeatherValue()
+						else
+							BlendWeather("Inclement_Stormfront", "clear", 1)
+							RestoreWeatherValue()
+						end
+					elseif uCurrentWeather == "Sandstorm" then
+						if currentWeather == "Stormfront" then
+							BlendWeather("Stormfront_Clear", "clear", 1)	
+						elseif currentWeather ~= "Clear" then
+							BlendWeather("Inclement_Stormfront", "clear", 1)
+							BlendWeather("Stormfront_Clear", "clear", 1)
+						end
+						currentWeather = "Sandstorm"
+						rep.GlobalWeather.Weather.Value = "Sandstorm"
+						rep.WeatherUpdate:FireAllClients("Sandstorm")
+						RestoreWeatherValue()
+					else
+						BlendWeather("Inclement_Stormfront", "clear", 1)
+						currentWeather = uCurrentWeather
+						rep.GlobalWeather.Weather.Value = currentWeather
+						RestoreWeatherValue()
+					end
+				end
+				omniToolProcess["Weather"] = true
+			end
+		end
+	end
+end
+
+function RestoreWeatherValue()
+	local direction = 1
+	if uWeather < weather then
+		direction = -1
+	end
+	while math.abs(uWeather - weather) > 0.001 do
+		wait()
+		weather = weather + (0.0005 * direction)
+		rep.GlobalWeather.Severity.Value = weather
+	end
+end
+
+function BlendWeather(switchMode, wMode, wIntensity)
+	if switchMode == "Stormfront_Inclement" then
+		local trueName = string.upper(string.sub(wMode, 1, 1))..string.sub(wMode, 2, string.len(wMode))
+		currentWeather = trueName
+		rep.GlobalWeather.Weather.Value = trueName
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, wIntensity * 0.1
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local trueIntensity = (wIntensity * 0.01)
+			local severity = math.min(trueIntensity * (elapsedSeconds / cycleTime), trueIntensity)
+			local newVal = BWL + (severity * (1 - BWL))
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = severity
+		end
+	elseif switchMode == "Clear_Sandstorm" then
+		local trueName = string.upper(string.sub(wMode, 1, 1))..string.sub(wMode, 2, string.len(wMode))
+		currentWeather = trueName
+		rep.GlobalWeather.Weather.Value = trueName
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, wIntensity * 0.1
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local trueIntensity = (wIntensity * 0.01)
+			local severity = math.min(trueIntensity * (elapsedSeconds / cycleTime), trueIntensity)
+			local newVal = PWL + (severity * (1 - PWL))
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = severity
+		end
+	elseif switchMode == "Clear_Stormfront" then
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, 10
+		if currentWeather == "Stormfront" then
+			cycleTime = 10 - (10 * rep.GlobalWeather.Severity.Value)
+		else
+			currentWeather = "Stormfront"
+			rep.GlobalWeather.Weather.Value = "Stormfront"
+		end
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local severity = math.min(elapsedSeconds / cycleTime, 1)
+			local newVal = PWL + ((BWL - PWL) * severity)
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = severity
+		end
+	elseif switchMode == "Inclement_Stormfront" then
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, rep.GlobalWeather.Severity.Value * 10
+		local sSev, sWeather = rep.GlobalWeather.Severity.Value, weather
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local severity = math.max(sSev - (sSev * (elapsedSeconds / cycleTime)), 0)
+			local newVal = sWeather - ((sWeather - BWL) * (elapsedSeconds / cycleTime))
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = severity
+		end
+		currentWeather = "Stormfront"
+		rep.GlobalWeather.Weather.Value = "Stormfront"
+		rep.GlobalWeather.Severity.Value = 1
+	elseif switchMode == "Stormfront_Clear" then
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, 10
+		local sVal = weather
+		if rep.GlobalWeather.Severity.Value ~= 1 then
+			cycleTime = rep.GlobalWeather.Severity.Value * 10
+		end
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local severity = math.min(elapsedSeconds / cycleTime, 1)
+			local newVal = BWL - ((BWL - PWL) * severity)
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = 1 - severity
+		end
+		currentWeather = "Clear"
+		rep.GlobalWeather.Weather.Value = "Clear"
+		rep.GlobalWeather.Severity.Value = 1
+	elseif switchMode == "Sandstorm_Clear" then
+		local startTime, elapsedSeconds, cycleTime = tick(), 0, rep.GlobalWeather.Severity.Value * 10
+		local sSev, sWeather = rep.GlobalWeather.Severity.Value, weather
+		while elapsedSeconds < cycleTime do
+			wait()
+			elapsedSeconds = tick() - startTime
+			local severity = math.max(sSev - (sSev * (elapsedSeconds / cycleTime)), 0)
+			local newVal = sWeather - ((sWeather - PWL) * (elapsedSeconds / cycleTime))
+			weather = newVal
+			rep.GlobalWeather.Severity.Value = severity
+		end
+		if wMode ~= "clear" then
+			currentWeather = "Stormfront"
+			rep.GlobalWeather.Weather.Value = "Stormfront"
+			rep.GlobalWeather.Severity.Value = 0
+		else
+			currentWeather = "Clear"
+			rep.GlobalWeather.Weather.Value = "Clear"
+			rep.GlobalWeather.Severity.Value = 1
+		end
+	end
+end
+
+function SetupTeleporter(touch)
+	local target = work:FindFirstChild(touch.Target.Value)
+	if target then
+		teleporterIndex[touch.Target.Value] = {target.CFrame.p, Vector2.new(target.Size.X / 2, target.Size.Z / 2)}
+	end
+	touch.Touched:Connect(function(part)
+		local isCharacter = part.Parent:findFirstChild("Humanoid")
+		if isCharacter then
+			local plr = game.Players:FindFirstChild(part.Parent.Name)
+			if plr then
+				if not teleportingIndex[plr.Name] and plrStatus[plr.Name] ~= "Teleporting" then
+					local teleportAllowed = true
+					if touch.Target.Value == "Last location" and not 
+						rep.CharacterBios:FindFirstChild(plr.Name):FindFirstChild("Last_location") then
+						teleportAllowed = false
+					end	
+					if teleportAllowed then
+						teleportingIndex[plr.Name] = touch.Target.Value		
+						rep.Teleport:InvokeClient(plr, touch.Target.Value)
+					end
+				end
+			end
+		end
+	end)
+end
+
+function rep.Teleport.OnServerInvoke(plr, mode, setting)
+	if mode == "Teleporting" then
+		local char = plr.Character
+		if char then
+			while not char.PrimaryPart do
+				wait()
+				if not game.Players:FindFirstChild(plr.Name) then
+					return
+				end
+			end
+			local location = teleportingIndex[plr.Name]
+			if location then
+				if typeof(location) == "string" then
+					if teleporterIndex[location] then
+						local x, z = teleporterIndex[location][2].x, teleporterIndex[location][2].y
+						char:SetPrimaryPartCFrame(CFrame.new(teleporterIndex[location][1]) + Vector3.new(math.random(-x,x), 3, math.random(-z,z)))
+						plrStatus[plr.Name] = "Playing"
+						--REMOVE PROP TELEPORTERS AND ADD SHELTERED REGIONS
+					elseif location == "Last location" then
+						local lastLocation = rep.CharacterBios:FindFirstChild(plr.Name).Last_location
+						char:SetPrimaryPartCFrame(CFrame.new(lastLocation.Value))
+						lastLocation:Destroy()
+						plrStatus[plr.Name] = "Playing"
+					end
+				elseif typeof(location) == "Instance" and location.PrimaryPart then
+					char:SetPrimaryPartCFrame(teleportingIndex[plr.Name].PrimaryPart.CFrame + Vector3.new(0, 2, 0))
+					--FIX FALSE CHARACTER FOR NON-HUMANOIDS
+					char.FalseCharacter.Value:Destroy()
+					char.FalseCharacter:Destroy()
+					plrStatus[plr.Name] = "Playing"
+					char.HumanoidRootPart.Anchored = false
+					char.Humanoid.WalkSpeed = 8
+				elseif typeof(location) == "CFrame" then
+					char.Archivable = true
+					local falseChar = char:Clone()
+					char.Archivable = false
+					falseChar:SetPrimaryPartCFrame(char.HumanoidRootPart.CFrame)
+					falseChar:FindFirstChild(rep.CharacterBios:FindFirstChild(plr.Name).RPName.Value).Name = plr.Name..": customizing..."
+					for _,v in pairs(falseChar:GetChildren()) do
+						if v:IsA("MeshPart") and v.Name ~= "CollisionPart" then
+							v.Anchored = true
+							v.CanCollide = false
+							v.Transparency = 0.5
+						end
+					end
+					falseChar.Name = plr.Name.."_PlaceHolder"
+					falseChar.Parent = work
+					local obval = Instance.new("ObjectValue")
+					obval.Name = "FalseCharacter"
+					obval.Value = falseChar
+					obval.Parent = char
+					char:SetPrimaryPartCFrame(location)
+					char.HumanoidRootPart.Anchored = true
+					char.Humanoid.WalkSpeed = 0
+					plrStatus[plr.Name] = "Customizing"
+				end
+				teleportingIndex[plr.Name] = nil
+			end
+		end
+	elseif string.find(mode, "Transitioning") then
+		plrStatus[plr.Name] = "Teleporting"
+		local category = string.sub(mode, 15, string.len(mode))
+		if category ~= "Map" then
+			teleportingIndex[plr.Name] = setting
+		else
+			local char = plr.Character
+			if char and char:FindFirstChild("FalseCharacter") then
+				teleportingIndex[plr.Name] = char.FalseCharacter.Value
+			end
+		end
+	elseif mode == "Cancel" then
+		teleportingIndex[plr.Name] = nil
+	end
+end
+
+local ancientTempleDoors = {}
+serv.TempleDoorsUpdate_Server.Event:Connect(function(mode, doorList)
+	if mode == "Receive" then
+		ancientTempleDoors = doorList
+	end
+end)
+
+serv.SetPropLimit_Server.Event:Connect(function(plrName, amount)
+	if gameData[plrName] and #gameData[plrName]["Server"]["PropsPlaced"] <= amount then
+		gameData[plrName]["Server"]["PropLimit"] = amount
+		rep.SetPropLimit_Client:FireClient(game.Players:FindFirstChild(plrName), amount)
+	end
+end)
+
+serv.PropsCleared_Server.Event:Connect(function(plrName)
+	ClearProps(plrName)
+end)
+
+rep.PropsCleared_Client.OnServerEvent:Connect(function(plr)
+	ClearProps(plr.Name)
+end)
+
+rep.PropDelete.OnServerEvent:Connect(function(plr, prop)
+	if prop.Parent == work then
+		local regionsCleared = false
+		if prop:FindFirstChild("TeleporterReference") or prop:FindFirstChild("ShelteredRegionReference") then
+			for _,v in pairs(prop:GetChildren()) do
+				if v.Name == "TeleporterReference" then
+					local tp = v.Value
+					if teleporterIndex[tp.Target.Value] then
+						teleporterIndex[tp.Target.Value] = nil
+					end
+					work:FindFirstChild(tp.Target.Value):Destroy()
+					tp:Destroy()
+				elseif v.Name == "ShelteredRegionReference" then
+					v.Value:Destroy()
+					regionsCleared = true
+				end
+			end
+			rep.UpdateShelteredRegions:FireAllClients()
+		end
+		prop:Destroy()
+		for i,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+			if v == prop then
+				table.remove(gameData[plr.Name]["Server"]["PropsPlaced"], i)
+				break
+			end
+		end
+	end
+end)
+
+function ClearProps(plrName)
+	local regionsCleared = false
+	for _,v in pairs(gameData[plrName]["Server"]["PropsPlaced"]) do
+		if v:FindFirstChild("TeleporterReference") or v:FindFirstChild("ShelteredRegionReference") then
+			for _,n in pairs(v:GetChildren()) do
+				if n.Name == "TeleporterReference" then
+					local tp = n.Value
+					if teleporterIndex[tp.Target.Value] then
+						teleporterIndex[tp.Target.Value] = nil
+					end
+					work:FindFirstChild(tp.Target.Value):Destroy()
+					tp:Destroy()
+				elseif n.Name == "ShelteredRegionReference" then
+					n.Value:Destroy()
+					regionsCleared = true
+				end
+			end
+		end
+		v:Destroy()
+	end
+	if seatConnections[plrName] then
+		seatConnections[plrName][2]:Disconnect()
+		seatConnections[plrName] = nil
+	end
+	if regionsCleared then
+		rep.UpdateShelteredRegions:FireAllClients()
+	end
+	gameData[plrName]["Server"]["PropsPlaced"] = {}
+end
+
+function rep.SignUpdate.OnServerInvoke(plr, sign, text, font, color, stroke, scale, textSize, xPos, yPos)
+	local owner = sign.Parent.Parent.Parent.Owner.Value
+	if owner == plr.Name then
+		local filteredText = Chat:FilterStringAsync(text, plr, plr)
+		sign.Text = filteredText
+		sign.Font = font
+		sign.TextColor3 = color
+		sign.TextStrokeTransparency = stroke
+		sign.TextScaled = scale
+		sign.TextSize = textSize
+		sign.TextXAlignment = xPos
+		sign.TextYAlignment = yPos
+		return filteredText
+	end
+end
+
+function rep.PlaceProp.OnServerInvoke(plr, itemName, cf, mouseTarget)
+	if (itemName == "Bunker" or itemName == "Abandoned Bunker") and 
+		(not mouseTarget or not (mouseTarget.Material == Enum.Material.Sand and 
+		(mouseTarget.BrickColor == BrickColor.new("Oyster") or mouseTarget.BrickColor == BrickColor.new("Light orange")))) then
+		return false
+	elseif plr.Character.PrimaryPart.CFrame.p.Y < -110 or plr.Character.PrimaryPart.CFrame.p.X > 1900 then
+		return false
+	end
+	if gameData[plr.Name]["Server"]["PropLimit"] > #gameData[plr.Name]["Server"]["PropsPlaced"] then
+		local prop = rep.Props:FindFirstChild(itemName)
+		if prop:FindFirstChild("Limit") and prop.Limit.Value then
+			local propCount = 0
+			for _,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+				if v.Name == prop.Name then
+					propCount = propCount + 1
+					if propCount == prop.Limit.Value then
+						return false
+					end
+				end
+			end
+		end
+		local prop = PlaceProp(plr.Name, prop, cf, os.time())
+		return prop
+	else
+		return false
+	end
+end
+
+function PlaceProp(plrName, prop, cf, creationTime, signDetails)
+	prop = prop:Clone()
+	prop:SetPrimaryPartCFrame(cf)
+	local m = Instance.new("Model")
+	prop.Parent = m
+	prop.Owner.Value = plrName
+	local shelteredRegionInside = false
+	if prop:FindFirstChild("ShelteredRegion") then
+		shelteredRegionInside = true
+	end
+	local mode = "Prop"
+	if string.find(prop.Name, "Bunker") then
+		mode = nil
+	end
+	Scan(m, mode)
+	if prop:FindFirstChild("ScrapSegment") then
+		for _,v in pairs(prop:GetChildren()) do
+			if v:IsA("BasePart") and v.Material == mat.Metal and v.BrickColor == BrickColor.new("Bright yellow") then
+				local setting = scrapSegmentTable[math.random(1, #scrapSegmentTable)]
+				v.Material = setting[1]
+				v.BrickColor = BrickColor.new(setting[2][math.random(1, #setting[2])])
+			end
+		end
+	end
+	if signDetails and string.find(prop.Name, "Sign") then
+		for _,v in pairs(prop:GetChildren()) do
+			if v:FindFirstChild("SignGui") then
+				local sign = v.SignGui.Label
+				sign.Text = signDetails[1]
+				sign.TextColor3 = Color3.new(signDetails[2][1], signDetails[2][2], signDetails[2][3])
+				sign.TextSize = signDetails[3]
+				sign.TextStrokeTransparency = signDetails[4]
+				sign.TextScaled = signDetails[5]
+				sign.Font = Enum.Font[signDetails[6]]
+				sign.TextXAlignment = Enum.TextXAlignment[signDetails[7]]
+				sign.TextYAlignment = Enum.TextYAlignment[signDetails[8]]
+				break
+			end
+		end
+	end
+	local timeStamp = Instance.new("NumberValue")
+	timeStamp.Name = "TimeStamp"
+	timeStamp.Parent = prop
+	timeStamp.Value = creationTime
+	prop.Parent = work
+	if shelteredRegionInside then
+		rep.UpdateShelteredRegions:FireAllClients()
+	end
+	m:Destroy()
+	table.insert(gameData[plrName]["Server"]["PropsPlaced"], prop)
+	return prop
+end
+
+function rep.CheckCode.OnServerInvoke(plr, code)
+	if codes[code] then
+		local newItemAdded = false
+		local newTools, newMorphs = {}, {}
+		for i,v in pairs(codes[code]["Tools"]) do
+			if not gameData[plr.Name]["Account"]["ToolsOwned"][v] then
+				newItemAdded = true
+				gameData[plr.Name]["Account"]["ToolsOwned"][v] = "Code_Obtained"
+				newTools[i] = {v, serv.Tools:FindFirstChild(i).Value}
+			end
+		end
+		for _,v in pairs(codes[code]["Morphs"]) do
+			if not gameData[plr.Name]["Account"]["MorphsOwned"][v] then
+				newItemAdded = true
+				gameData[plr.Name]["Account"]["MorphsOwned"][v] = "Code_Obtained"
+				newMorphs[#newMorphs + 1] = v
+			end
+		end
+		if newItemAdded then
+			SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+		end
+		return newTools, newMorphs
+	else
+		return false
+	end
+end
+
+function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
+	if mode == "Save" then
+		local t = tick()
+		if (t - gameData[plr.Name]["Server"]["LastSave"]) > 15 then
+			gameData[plr.Name]["Server"]["LastSave"] = t
+			if string.find(input1, "Build") then
+				gameData[plr.Name]["Account"]["PropSaves"][input1]["Name"] = input2
+				gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"] = {}
+				for _,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
+					if not v:FindFirstChild("Chassis") then
+						local signData = {}
+						if string.find(v.Name, "Sign") then
+							for _,b in pairs(v:GetChildren()) do
+								if b:FindFirstChild("SignGui") then
+									local sign = b.SignGui.Label
+									local x, y, f, c = tostring(sign.TextXAlignment), tostring(sign.TextYAlignment),
+										tostring(sign.Font), sign.TextColor3
+									signData = {sign.Text, {c.r, c.g, c.b}, sign.TextSize, sign.TextStrokeTransparency,
+										sign.TextScaled, string.sub(f, 11, string.len(f)), 
+										string.sub(x, 21, string.len(x)), string.sub(y, 21, string.len(y))}
+									break
+								end
+							end
+						end
+						table.insert(gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"], 
+							{v.Name, {v.PrimaryPart.CFrame:GetComponents()}, signData})
+					end
+				end
+			else
+				if plr.Character then
+					local customShirt = gameData[plr.Name]["Server"]["Shirt"] == "Custom" or "Loaded"
+					local customPants = gameData[plr.Name]["Server"]["Pants"] == "Custom" or "Loaded"
+					if customShirt and plr.Character:FindFirstChild("Shirt") then
+						customShirt = plr.Character.Shirt.ShirtTemplate
+					elseif not customShirt then
+						customShirt = gameData[plr.Name]["Server"]["Shirt"]
+					end
+					if customPants and plr.Character:FindFirstChild("Pants") then
+						customPants = plr.Character.Pants.PantsTemplate
+					elseif not customPants then
+						customPants = gameData[plr.Name]["Server"]["Pants"]
+					end
+					local modAcc, modEquip, modTools = {}, {}, {}
+					for i,v in pairs(gameData[plr.Name]["Server"]["Accessories"]) do
+						modAcc[i] = v
+						modAcc[i]["Object"] = nil
+					end
+					for i,v in pairs(gameData[plr.Name]["Server"]["Equipment"]) do
+						modEquip[i] = v
+					end
+					for i,v in pairs(gameData[plr.Name]["Server"]["Tools"]) do
+						modTools[i] = v
+					end
+					local headColor = plr.Character.MeshHead.Color
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Name"] = input2
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["RPName"] = rep.CharacterBios:FindFirstChild(plr.Name).RPName.Value
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Bio"] = rep.CharacterBios:FindFirstChild(plr.Name).Value
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["BodyColor"] = {r = headColor.r, g = headColor.g, b = headColor.b}
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Accessories"] = modAcc
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Equipment"] = modEquip
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Tools"] = modTools
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Shirt"] = customShirt
+					gameData[plr.Name]["Account"]["CharSaves"][input1]["Pants"] = customPants
+				else
+					return false
+				end
+			end
+			SaveData(plr.UserId, gameData[plr.Name]["Account"], DataStore)
+			return true
+		else
+			return false
+		end
+	elseif mode == "Load" then
+		if string.find(input1, "Build") then
+			if #gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"] + #gameData[plr.Name]["Server"]["PropsPlaced"] <=
+				gameData[plr.Name]["Server"]["PropLimit"] and 
+				typeof(gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"][1]) == "table" then
+					local creationTime = os.time()
+				for _,v in pairs(gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]) do
+					local prop = rep.Props:FindFirstChild(v[1])
+					if prop then
+						PlaceProp(plr.Name, prop, CFrame.new(unpack(v[2])), creationTime, v[3])
+					end
+				end
+				return #gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]
+			end
+		else
+			local loadout, dataBase
+			if not input2 then
+				dataBase = gameData[plr.Name]["Server"]["LastCharacter"]
+			else
+				dataBase = gameData[plr.Name]["Account"]["CharSaves"][input1]
+			end
+			if not dataBase then return end
+			if not dataBase["Equipment"] then return end
+			loadout = {Tools = dataBase["Tools"], Equipment = dataBase["Equipment"], Shirt = dataBase["Shirt"],
+				Pants = dataBase["Pants"], Accessories = dataBase["Accessories"], BodyColor = dataBase["BodyColor"], 
+				RPName = dataBase["RPName"], Bio = dataBase["Bio"]}
+			for _,v in pairs(plr.Character.Humanoid:GetAccessories()) do
+				LoadItem(plr, "RemoveAccessory", v)
+			end
+			for i,v in pairs(loadout["Accessories"]) do
+				LoadItem(plr, "AddAccessory", string.sub(i, 3, string.len(i)))
+				local acc = gameData[plr.Name]["Server"]["Accessories"]
+				if v["Texture"] then
+					LoadItem(plr, "AccessoryChange_SetId", acc[i]["Object"], v["Texture"])
+				end
+				if v["r"] then
+					LoadItem(plr, "AccessoryChange_SetColor", acc[i]["Object"], Vector3.new(v["r"], v["g"], v["b"]))
+				end
+			end
+			local preset = true
+			for i,v in pairs(loadout["Equipment"]) do
+				if v ~= loadout["Equipment"]["Head"] then
+					preset = false
+					break
+				end
+			end
+			if preset then
+				LoadItem(plr, "MorphChange_Preset", loadout["Equipment"]["Head"])
+			else
+				for i,v in pairs(loadout["Equipment"]) do
+					LoadItem(plr, "MorphChange_"..i, v)
+				end
+			end
+			for _,v in pairs({"Primary", "Secondary", "Utility1", "Utility2", "Utility3"}) do
+				if loadout["Tools"][v]["Variant"] ~= "None" then
+					LoadItem(plr, "ToolChange", loadout["Tools"][v]["Base"], loadout["Tools"][v]["Variant"], v)
+				elseif gameData[plr.Name]["Server"]["Tools"][v] ~= "None" then
+					LoadItem(plr, "ToolChange", "None", gameData[plr.Name]["Server"]["Tools"][v]["Variant"])
+				end
+			end
+			LoadItem(plr, "BodyColorChange_SetColor", loadout["BodyColor"])
+			LoadItem(plr, "ShirtChange", loadout["Shirt"])
+			LoadItem(plr, "PantsChange", loadout["Pants"])
+			LoadItem(plr, "NameChange", loadout["RPName"])
+			LoadItem(plr, "BioChange", loadout["Bio"])
+			--make shirts and pants load in from previous Custom shirts/pants
+			return loadout
+		end
+	end
+end
+
+function OrganizeCustomization()
+	local morphs = Instance.new("Folder")
+	for _,v in pairs(serv.Morphs:GetChildren()) do
+		local val = Instance.new("StringValue")
+		val.Name = v.Name
+		val.Value = "Humanoid"
+		val.Parent = morphs
+		if v:FindFirstChild("Pass") then
+			local pass = v.Pass:Clone()
+			pass.Parent = val
+		end
+		for _,n in pairs(v:GetChildren()) do
+			if n:IsA("Folder") then
+				local containerName = containerNames[string.sub(n.Name, 1, string.len(n.Name) - 5)]
+				if containerName and not val:FindFirstChild(containerName) then
+					local newVal = Instance.new("BoolValue")
+					newVal.Name = containerName
+					newVal.Parent = val
+				end
+				for _,m in pairs(n:GetChildren()) do
+					local oT = Instance.new("NumberValue")
+					oT.Value = m.Transparency
+					oT.Name = "StoredTransparency"
+					oT.Parent = m
+				end
+			end
+		end
+		if v:FindFirstChild("NonHumanoid") then
+			val.Value = v.NonHumanoid.Value
+		end
+	end
+	morphs.Name = "Morphs"
+	morphs.Parent = rep
+	local shirts = Instance.new("Folder")
+	for _,v in pairs(serv.Shirts:GetChildren()) do
+		local sv = Instance.new("StringValue")
+		sv.Name = v.Name
+		sv.Value = v.Creator.Value
+		sv.Parent = shirts
+	end
+	shirts.Name = "Shirts"
+	shirts.Parent = rep
+	local pants = Instance.new("Folder")
+	for _,v in pairs(serv.Pants:GetChildren()) do
+		local sv = Instance.new("StringValue")
+		sv.Name = v.Name
+		sv.Value = v.Creator.Value
+		sv.Parent = pants
+	end
+	pants.Name = "Pants"
+	pants.Parent = rep
+	for _,v in pairs(serv.Tools:GetChildren()) do
+		local f = Instance.new("StringValue")
+		f.Name = v.Name
+		f.Value = v.Value
+		for _,n in pairs(v:GetChildren()) do
+			if n:IsA("Folder") then
+				local variant = Instance.new("BoolValue")
+				variant.Name = n.Name
+				variant.Parent = f
+				for _,m in pairs(n:GetChildren()) do
+					if not m:IsA("Model") then
+						local a = m:Clone()
+						a.Parent = variant
+					end
+				end
+			elseif (n:IsA("StringValue") or n:IsA("NumberValue")or n:IsA("IntValue") or n:IsA("BoolValue")) and 
+				(string.find(n.Name, "Anim") or string.find(n.Name, "Setting") or string.find(n.Name, "Sound")) then
+				local a = n:Clone()
+				a.Parent = f
+			elseif n.Name == "Model_OffHand" then
+				local isDualWielded = false
+				if string.find(v.Value, "Utility") then
+					isDualWielded = true
+				elseif n:FindFirstChild("Tip") then
+					isDualWielded = true
+				end
+				if isDualWielded then
+					local d = Instance.new("BoolValue")
+					d.Name = "Setting_isDualWielded"
+					d.Parent = f
+				end
+			end
+		end
+		f.Parent = rep.Tools
+	end
+	for _,v in pairs(serv.Vehicles:GetChildren()) do
+		local f = Instance.new("BoolValue")
+		f.Name = v.Name
+		f.Parent = rep.Vehicles
+		for _,n in pairs(v:GetChildren()) do
+			if n:IsA("IntValue") or n:IsA("StringValue") then
+				local nC = n:Clone()
+				nC.Parent = f
+			end
+		end
+	end
+end
+	
+function Scan(object, mode)
+	for _,item in pairs(object:GetChildren()) do
+		if mode == "Prop" and (item:IsA("BasePart") or item:IsA("UnionOperation") or item:IsA("MeshPart")) then
+			PhysicsService:SetPartCollisionGroup(item, "Props")
+		end
+		if item.Name == "V4Terra" or item.Name == "RoadScale" then
+			item:Destroy()
+		elseif item.Name == "Teleporter" then
+			if string.find(item.Target.Value, "Personal") then
+				local targetName = item.Target.Value
+				local destination = item.Parent:FindFirstChild(targetName)
+				local newName = "Teleporter_"..item.Parent.Owner.Value.."'s "..string.sub(targetName, 21, string.len(targetName))
+				local reference = Instance.new("ObjectValue")
+				reference.Name = "TeleporterReference"
+				reference.Value = item
+				reference.Parent = item.Parent
+				destination.Name = newName
+				item.Target.Value = newName
+				destination.Parent = work
+				item.Parent = work
+			end
+			SetupTeleporter(item)
+		elseif string.find(item.Name, "Biome") or string.find(item.Name, "ShelteredRegion") then
+			if item:FindFirstChild("Owner") then
+				local reference = Instance.new("ObjectValue")
+				reference.Name = "ShelteredRegionReference"
+				reference.Value = item
+				reference.Parent = item.Parent
+			end
+			rayIgnoreList[#rayIgnoreList + 1] = item
+			item.Transparency = 1
+			item.Parent = regionFolder
+		elseif item.Name == "RadiationPoint" then
+			rayIgnoreList[#rayIgnoreList + 1] = item
+			item.Transparency = 1
+		elseif item:IsA("Part") and item.Name == "ARGReward" then
+			item.Transparency = 1
+			item.Touched:Connect(function(part)
+				local touchedChar, plr
+				for _,v in pairs(game.Players:GetChildren()) do
+					local char = v.Character
+					if char then
+						if part:IsDescendantOf(char) then
+							touchedChar = char
+							plr = v
+							break
+						end
+					end
+				end
+				if touchedChar and plr.Character:FindFirstChild("checkValue") then
+					local itemName = item.Item.Value
+					if not gameData[plr.Name]["Account"]["ToolsOwned"][itemName] then
+						gameData[plr.Name]["Account"]["ToolsOwned"][itemName] = true
+						local message = "Congratulations! You solved the ARG early and found the "..itemName..". It is now in your inventory."
+						rep.ServerNotification:FireClient(plr, message, itemName)
+					end
+				end
+			end)
+		elseif item:IsA("Part") and item.Name == "Reward" then
+			item.Parent = work.TouchItems
+			item.Transparency = 1
+			item.Touched:Connect(function(part)
+				local touchedChar, plr
+				for _,v in pairs(game.Players:GetChildren()) do
+					local char = v.Character
+					if char then
+						if part:IsDescendantOf(char) then
+							touchedChar = char
+							plr = v
+							break
+						end
+					end
+				end
+				if touchedChar then
+					local itemName = item.Item.Value
+					if not gameData[plr.Name]["Account"]["ToolsOwned"][itemName] then
+						gameData[plr.Name]["Account"]["ToolsOwned"][itemName] = true
+						local message = "Congratulations! You found "..itemName..". It is now in your inventory."
+						rep.ServerNotification:FireClient(plr, message, itemName)
+					end
+				end
+			end)
+		end
+		if item.name == "PickaxeDestruction" then
+			mineWalls[#mineWalls + 1] = item
+			local db = Instance.new("BoolValue")
+			db.Name = "Debounce"
+			db.Parent = item
+		end
+		if item:FindFirstChild("Type") then
+			if item.Type.Value == "LampPost" then
+				local pColor, lColor, pBrightness = Instance.new("Color3Value"), Instance.new("Color3Value"),
+					Instance.new("NumberValue")
+				pColor.Name, lColor.Name, pBrightness.Name = "PreferredPartColor", "PreferredLightColor", "PreferredBrightness"
+				pColor.Value, lColor.Value, pBrightness.Value = item.Light.Color, item.Light.Light.Color, item.Light.Light.Brightness
+				pColor.Parent, lColor.Parent, pBrightness.Parent = item.Light, item.Light, item.Light
+				item.Light.Light.Enabled = false
+				item.Light.BrickColor = BrickColor.new("Black")
+				item.Light.Material = Enum.Material.Ice
+				lampPosts[#lampPosts + 1] = item
+			end
+			if item:findFirstChild("Click") then
+				local debounce = Instance.new("BoolValue")
+				debounce.Name = "Debounce"
+				debounce.Parent = item
+				if item.Type.Value == "Door" then
+					local hinge = item:FindFirstChild("Hinge") 
+					if hinge and item.PrimaryPart == hinge then
+						local mode = Instance.new("StringValue")
+						mode.Name = "Mode"
+						mode.Value = "Closed"
+						mode.Parent = item
+						local rotation = -90
+						if hinge.CFrame.RightVector:Dot((item.Click.CFrame.p - hinge.CFrame.p).Unit) > 0 then
+							rotation = 90
+							item.Type.Value = "ReverseDoor"
+						end
+						local goalCF, startCF = Instance.new("CFrameValue"), Instance.new("CFrameValue")
+						startCF.Name = "StartCF"
+						goalCF.Name = "GoalCF"
+						startCF.Value = hinge.CFrame
+						goalCF.Value = hinge.CFrame * CFrame.Angles(0, math.rad(rotation), 0)
+						startCF.Parent = item
+						goalCF.Parent = item
+					end
+				elseif item.Type.Value == "Bed" or item.Type.Value == "Chair" then
+					local occupied = Instance.new("BoolValue")
+					occupied.Name = "Occupied"
+					occupied.Parent = item
+				elseif item.Type.Value == "Drawgate" then
+					local mode = Instance.new("StringValue")
+					mode.Name = "Mode"
+					mode.Value = "Down"
+					mode.Parent = item
+					local gate = item.Parent
+					for _,v in pairs(gate:GetChildren()) do
+						if string.find(v.Name, "Rope") then
+							local sP, eP
+							if string.find(v.Name, "Gate") then
+								sP, eP = gate.Gate:FindFirstChild(v.Name.."Start").CFrame.p, 
+									gate.GateGoals:FindFirstChild(v.Name.."End").CFrame.p
+								v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+								v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+							elseif string.find(v.Name, "Turn1") then
+								sP, eP = gate.Turn1Goals:FindFirstChild(v.Name.."Start").CFrame.p, 
+									gate.Turn2Goals:FindFirstChild(v.Name.."End").CFrame.p
+								v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+								v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+							elseif string.find(v.Name, "Turn3") then
+								sP, eP = gate.Turn3Goals:FindFirstChild(v.Name.."Start").CFrame.p, 
+									gate.Turn4Goals:FindFirstChild(v.Name.."End").CFrame.p
+								v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+								v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+							end
+						end
+					end
+				elseif item:findFirstChild("Lift") then
+					local mode = Instance.new("StringValue")
+					mode.Name = "Mode"
+					mode.Value = "Up"
+					mode.Parent = item
+				elseif item:FindFirstChild("HeatedPad") or item.Type.Value == "Computer" or item.Type.Value == "Sink" or item.Type.Value == "Shower"
+					or item.Type.Value == "Fire" or item.Type.Value == "Light" or item.Type.Value == "Candle" or item.Type.Value == "LightRoom" or
+					item.Type.Value == "Radio" then
+					local activated = Instance.new("BoolValue")
+					activated.Name = "Activated"
+					activated.Parent = item
+					if item.Type.Value == "Light" then
+						for _,v in pairs(item:GetChildren()) do
+							local lightObject = v:FindFirstChild("Light")
+							if lightObject then
+								local pColor, lColor, pBrightness = Instance.new("Color3Value"), Instance.new("Color3Value"),
+									Instance.new("NumberValue")
+								pColor.Name, lColor.Name, pBrightness.Name = "PreferredPartColor", "PreferredLightColor", "PreferredBrightness"
+								pColor.Value, lColor.Value, pBrightness.Value = v.Color, lightObject.Color, lightObject.Brightness
+								pColor.Parent, lColor.Parent, pBrightness.Parent = v, v, v
+								lightObject.Enabled = false
+								v.BrickColor = BrickColor.new("Black")
+								v.Material = Enum.Material.Ice
+							end
+						end
+					elseif item.Type.Value == "Fire" or item.Type.Value == "Candle" then
+						for _,v in pairs(item.Fire:GetChildren()) do
+							v.Enabled = false
+						end
+					elseif item.Type.Value == "LightRoom" then
+						for _,v in pairs(item.Parent:GetChildren()) do
+							local light = v:FindFirstChild("Light")
+							if light then
+								light.Light.Enabled = false
+								light.BrickColor = BrickColor.new("Black")
+								light.Material = Enum.Material.Ice
+							end
+						end
+					elseif item:FindFirstChild("HeatedPad") then
+						local oC = Instance.new("Color3Value")
+						oC.Value = item.HeatedPad.Color
+						oC.Name = "OriginalColor"
+						oC.Parent = item
+						local oT = Instance.new("StringValue")
+						oT.Value = tostring(item.HeatedPad.Material)
+						oT.Name = "OriginalMaterial"
+						oT.Parent = item
+					elseif item.Type.Value == "Radio" then
+						local song = serv.Radio:FindFirstChild(currentGlobalSong)
+						item.Speaker.Track.SoundId = song.SoundId
+						item.Speaker.Track.PlaybackSpeed = song.PlaybackSpeed
+						item.Speaker.Track:Play()
+					end
+				elseif item.Type.Value == "Drawer" then
+					local drawn = Instance.new("BoolValue")
+					drawn.Name = "Drawn"
+					drawn.Parent = item
+					local inCF = Instance.new("CFrameValue")
+					inCF.Value = item.PrimaryPart.CFrame
+					inCF.Name = "InCF"
+					inCF.Parent = item
+					local frontPanel
+					for _,v in pairs(item:GetChildren()) do
+						if v:FindFirstChild("FrontPanel") then
+							v.FrontPanel:Destroy()
+							frontPanel = v
+							break
+						end
+					end
+					local distance = (frontPanel.CFrame.p - item.PrimaryPart.CFrame.p).magnitude
+					local outCF = Instance.new("CFrameValue")
+					outCF.Value = item.PrimaryPart.CFrame * CFrame.new(0, 0, -(distance - 0.2))
+					outCF.Name = "OutCF"
+					outCF.Parent = item
+				elseif item.Type.Value == "ElectricDoor" then
+					local state = Instance.new("BoolValue")
+					state.Name = "Open"
+					state.Parent = item
+					for i = 1, 2 do
+						local door = item:FindFirstChild("Door"..i)
+						local inCF = Instance.new("CFrameValue")
+						inCF.Value = door.PrimaryPart.CFrame
+						inCF.Name = "InCF"
+						inCF.Parent = door
+						local outerPanel
+						for _,v in pairs(door:GetChildren()) do
+							if v:FindFirstChild("OuterPanel") then
+								v.OuterPanel:Destroy()
+								outerPanel = v
+								break
+							end
+						end
+						if not outerPanel then
+							print("No outer panel: ",door.PrimaryPart.CFrame.p)
+						end
+						local outCF = Instance.new("CFrameValue")
+						outCF.Value = outerPanel.CFrame
+						outCF.Name = "OutCF"
+						outCF.Parent = door
+					end
+				end
+			end
+		end
+		if #item:GetChildren() > 0 then
+			Scan(item, mode)
+		end
+	end
+end
+
+Scan(work)
+OrganizeCustomization()
+
+serv.Reward_Server.Event:Connect(function(plr, mode)
+	local char = plr.Character
+	if char then
+		if mode == "Easter" then
+			if char.EasterPack.Fire.Material == Enum.Material.Neon and char.EasterPack.Water.Material == Enum.Material.Neon and
+				char.EasterPack.Earth.Material == Enum.Material.Neon and char.EasterPack.Air.Material == Enum.Material.Neon then
+				if not gameData[plr.Name]["Account"]["ToolsOwned"]["Raffica"] then
+					gameData[plr.Name]["Account"]["ToolsOwned"]["Raffica"] = true
+					local message = "Congratulations! You found Raffica. It is now in your inventory."
+					rep.ServerNotification:FireClient(plr, message, "Raffica")
+				end
+				char.EasterPack:Destroy()
+			end
+		elseif mode == "Halloween" then
+			if not gameData[plr.Name]["Account"]["ToolsOwned"]["EM2416"] then
+				gameData[plr.Name]["Account"]["ToolsOwned"]["EM2416"] = true
+				local message = "Congratulations! You found the EM2416. It is now in your inventory."
+				rep.ServerNotification:FireClient(plr, message, "EM2416")
+				wait(4)
+				gameData[plr.Name]["Account"]["MorphsOwned"]["USSF IFPA Suit"] = true
+				message = "Congratulations! You found the USSF IFPA Suit. It is now in your inventory."
+				rep.ServerNotification:FireClient(plr, message, "USSF IFPA Suit", "Morph")
+			end
+			char.KeyBackpack:Destroy()
+		elseif mode == "Terraformed Pickaxe" then
+			if not gameData[plr.Name]["Account"]["ToolsOwned"]["Terraformed Pickaxe"] then
+				gameData[plr.Name]["Account"]["ToolsOwned"]["Terraformed Pickaxe"] = true
+				local message = "Congratulations! You found Terraformed Pickaxe. It is now in your inventory."
+				rep.ServerNotification:FireClient(plr, message, "Terraformed Pickaxe")
+			end
+		end
+	end
+end)
+
+function CoroutineLauncher(mode, input1, input2, input3, input4, input5, input6, input7)
+	if mode == 'PlaySound' then
+		local test=coroutine.create(function() 
+			local e,m=pcall(PlaySound, input1, input2, input3, input4, input5, input6, input7) 
+			if not e then print('ERROR 4: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "GunFlash" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(GunFlash, input1, input2, input3, input4, input5) 
+			if not e then print('ERROR 6: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "FlashEffect" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(FlashEffect, input1) 
+			if not e then print('ERROR 11: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "LaunchThrowable" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(LaunchThrowable, input1, input2["Power"], input2["Angle"], input2["Mode"], input2["Target"]) 
+			if not e then print('ERROR 13: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "SmokeGrenade" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(SmokeGrenade, input1) 
+			if not e then print('ERROR 14: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "MineWall" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(MineWall, input1, input2, input3) 
+			if not e then print('ERROR 3: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "GeigerCounter" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(GeigerCounter, input1) 
+			if not e then print('ERROR 10: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "GenerateLightning" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(GenerateLightning) 
+			if not e then print('ERROR 5: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "Radio" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(Radio) 
+			if not e then print('ERROR 8: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "Announcement" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(Announcement) 
+			if not e then print('ERROR 7: ',m) end 
+		end) 
+		coroutine.resume(test) 
+	elseif mode == "ParticleEffect" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(ParticleEffect, input1, input2, input3, input4) 
+			if not e then print('ERROR 9: ',m) end 
+		end) 
+		coroutine.resume(test)
+	elseif mode == "CodesUpdate" then
+		local test=coroutine.create(function() 
+			local e,m=pcall(CodesUpdate) 
+			if not e then print('ERROR 12: ',m) end 
+		end) 
+		coroutine.resume(test)	
+	end
+end
+-- implement codes for items using pastebin?
+function CodesUpdate()
+	local json
+	local result = ypcall(function()
+		json = HttpService:GetAsync("https://pastebin.com/raw/hAe5m9Af")
+	end)
+	if json then
+		codes = HttpService:JSONDecode(json)
+	end
+end
+
+function GeigerCounter(handle)
+	local t = tick()
+	while handle.Parent do
+		local distance, closestPoint = 100000, nil
+		for _,point in pairs(radiationPoints) do
+			local mag = (point.CFrame.p - handle.CFrame.p).magnitude
+			if mag < distance then
+				closestPoint = point
+				distance = mag
+			end
+		end
+		if closestPoint then
+			handle.Counter.Pitch = 0.5 + math.max((1 - (distance / closestPoint.Range.Value)) * closestPoint.Intensity.Value, 0)
+		end
+		while (tick() - t) < 0.4 do
+			wait()
+		end
+		wait()
+	end
+end
+
+function FlashEffect(part)
+	local db = part.Flash.FlashDebounce
+	db.Value = db.Value + 1
+	part.Flash.Flash.Rotation = math.random(-180, 180)
+	part.Flash.Enabled = true
+	part.Light.Enabled = true
+	wait(0.1)
+	db.Value = db.Value - 1
+	if db.Value == 0 then
+		part.Flash.Enabled = false
+		part.Light.Enabled = false
+	end
+end
+
+function ParticleEffect(name, cf, mode, intensity)
+	local clo = serv.Particles:FindFirstChild(name):Clone()
+	clo.CFrame = cf
+	clo.Parent = work
+	if mode == "Emission" then
+		clo.Particle:Emit(intensity)
+	else
+		wait(intensity)
+	end
+	clo.Particle.Enabled = false
+	wait(clo.Particle.Lifetime.Max)
+	clo:Destroy()
+end
+
+function MineWall(position, pickaxeName, plr)
+	for _,v in pairs(mineWalls) do
+		if (position - v.Position).magnitude < 5 and not v.Debounce.Value then
+			v.Debounce.Value = true
+			CoroutineLauncher("PlaySound", v, "InteractiveSounds", "Crumble", 0, {95, 105})
+			v.Transparency = 1
+			v.CanCollide = false
+			wait(10)
+			v.Transparency = 0
+			v.CanCollide = true
+			v.Debounce.Value = false
+			break
+		end
+	end
+	for _,v in pairs(ancientTempleDoors) do
+		if (position - v.PrimaryPart.Position).magnitude < 8 and ((pickaxeName == "Windswept Pickaxe" and v.Name == "AirDoor") or
+			(pickaxeName == "Abyssal Pickaxe" and v.Name == "WaterDoor") or (pickaxeName == "Incinerated Pickaxe" and v.Name == "FireDoor")) then
+			serv.TempleDoorsUpdate_Server:Fire("Send", v, plr)
+			break
+		end
+	end
+end
+-- READ THIS RADIO STUFF
+function Announcement()
+	if not announcementOrder[1] then
+		announcementOrder = Shuffle({unpack(announcements)})
+	end
+	rep.AnnouncementRunning.Value = true
+	rep.RadioUpdate:FireAllClients("Announcement", "Intro")
+	local intro = serv.Radio:FindFirstChild("Intro")
+	if intro then
+		UpdatePropRadios("Announcement_Begin", serv.Radio.Intro)
+		wait(intro.TimeLength - 0.1)
+	end
+	UpdatePropRadios("Announcement", announcementOrder[1])
+	rep.RadioUpdate:FireAllClients("Announcement", announcementOrder[1].Name)
+	wait(announcementOrder[1].TimeLength - 0.1)
+	table.remove(announcementOrder, 1)
+	rep.RadioUpdate:FireAllClients("Announcement", "Outro")
+	local outro = serv.Radio:FindFirstChild("Outro")
+	if outro then
+		UpdatePropRadios("Announcement_End", outro)
+		wait(outro.TimeLength - 0.1)
+	end
+	rep.AnnouncementRunning.Value = false
+end
+
+function Radio()
+	while true do
+		if not songOrder[1] then
+			songOrder = Shuffle(songs)
+		end
+		for _,v in pairs(songOrder) do
+			currentGlobalSong = v.Name
+			rep.RadioUpdate:FireAllClients("Song", v.Name)
+			UpdatePropRadios("Music", v)
+			wait((v.TimeLength / v.PlaybackSpeed) - 0.1)
+		end
+		songOrder = {}
+		wait()
+	end
+end
+
+function UpdatePropRadios(mode, sound)
+	for _,v in pairs(game.Players:GetChildren()) do
+		if gameData[v.Name] then
+			for _,v in pairs(gameData[v.Name]["Server"]["PropsPlaced"]) do
+				if v.Name == "Radio" then
+					if string.find(mode, "Announcement") then
+						if string.find(mode, "Begin") then
+							v.Speaker.Track.Volume = 0
+							v.Speaker.Announcement.Volume = 1
+							v.Speaker.MusicRunning.Value = false
+						end
+						v.Speaker.Announcement.SoundId = sound.SoundId
+						v.Speaker.Announcement:Play()
+						if string.find(mode, "End") then
+							wait(sound.TimeLength)
+							v.Speaker.MusicRunning.Value = true
+							v.Speaker.Track.Volume = 1
+							v.Speaker.Announcement.Volume = 0
+						end
+					else
+						v.Speaker.Track.SoundId = sound.SoundId
+						v.Speaker.Track.PlaybackSpeed = sound.PlaybackSpeed
+						v.Speaker.Track:Play()
+					end
+				end
+			end
+		end
+	end
+end
+
+function PlaySound(source, folder, sound, duration, pitchRange, volume, timePos)
+	local s = serv:FindFirstChild(folder):findFirstChild(sound):Clone()
+	s.Parent = source
+	s.PlaybackSpeed = math.random(pitchRange[1], pitchRange[2]) / 100
+	if not volume then
+		volume = s.Volume
+	end
+	s.Volume = volume
+	s.TimePosition = timePos
+	s:Play()
+	if duration == 0 then 
+		duration = s.TimeLength
+	end
+	if duration then
+		wait(duration)
+		s:Destroy()
+	end
+end
+
+-----------------------------------------------------------------------------AMBIENT
+function GenerateTargetedLightning(origin, targetPos)
+	local segmentlength = 2
+	local variance = 1.5
+	local timetofade = .25
+	local range = 20
+    local m = Instance.new("Model")
+    m.Name = "Lightning"
+    local lastpos = origin
+    local totalsegments = math.ceil(range / segmentlength)
+    local direction = (targetPos - origin).unit
+    local struck = false
+    for i = 1, totalsegments do
+        if not struck then
+			local r1, r2, r3 = math.random(), math.random(), math.random() 
+            local entropy = Vector3.new(variance * ((r1 * 2) - 1), variance * ((r2 * 2) - 1), variance * ((r3 * 2) - 1))
+            local newpos = origin + (direction * (range * (i / totalsegments))) + entropy
+            local hit, endpos = LightningRaycast(lastpos, (newpos - lastpos).unit, (lastpos - newpos).magnitude)
+            local l = Instance.new("Part")
+            l.CanCollide = false
+            l.Anchored = true
+            l.BrickColor = BrickColor.new("White")
+			l.Material = Enum.Material.Neon
+            l.Size = Vector3.new(0.2, (lastpos - endpos).magnitude, 0.2)
+            local light = Instance.new("PointLight")
+            light.Parent = l
+            light.Range = 7
+            light.Brightness = 9
+            light.Color = l.Color
+            l.CFrame = CFrame.new(lastpos, endpos) * CFrame.Angles(math.pi/2, 0, 0) * CFrame.new(0, - (lastpos - endpos).magnitude/2, 0)
+            l.Parent = m
+            lastpos = endpos
+        end
+    end
+    m.Parent = game.Workspace
+	wait(0.2)
+	m:Destroy()
+end
+
+function LightningRaycast(spos,vec,currentdist,char)
+    local hit2, pos2 = game.Workspace:FindPartOnRay(Ray.new(spos + (vec * 0.01), vec * currentdist), char)
+    if hit2 ~= nil and pos2 then
+        if hit2.Transparency >= 0.5 or hit2.Name == "Handle" then
+            local currentdist = currentdist - (pos2 - spos).magnitude
+            return LightningRaycast(pos2, vec, currentdist)
+        end
+    end
+    return hit2, pos2
+end
+
+function GenerateLightning()
+	local groundTouched, boltParts = false, {}
+	local newPart = serv.Lightning:Clone()
+	local startingLocation = CFrame.new(math.random(-1300, 1000), 500, math.random(-3000, 2000)) * 
+		CFrame.Angles(math.rad(math.random(-15, 15)), math.rad(math.random(-15, 15)), math.rad(math.random(-15, 15)))
+	newPart.CFrame = startingLocation
+	newPart.Size = Vector3.new(2, math.random(8, 40), 2)
+	rep.WeatherUpdate:FireAllClients("Thunder", startingLocation)
+	boltParts[1] = newPart
+	local currentCentralSegment = newPart
+	while not groundTouched do
+		local newSegment = NewLightningSegment(currentCentralSegment, 2)
+		currentCentralSegment = newSegment
+		boltParts[#boltParts + 1] = newSegment
+		if math.random(1, 8) == 8 then
+			local width = 2
+			boltParts[#boltParts + 1] = NewLightningSegment(newSegment, 2)
+			while width > 0.5 do
+				local strayPart = NewLightningSegment(boltParts[#boltParts], width)
+				boltParts[#boltParts + 1] = strayPart
+				width = width - (math.random(25, 50) * 0.01)
+				wait()
+			end
+		end
+		if newSegment.CFrame.p.Y < 0 then
+			groundTouched = true
+		end
+		wait()
+	end
+	for _,v in pairs(boltParts) do
+		v.Parent = work
+	end
+	wait(0.4)
+	for i = 1, 4 do
+		for _,v in pairs(boltParts) do
+			v.Transparency = 1
+		end
+		wait(0.2)
+		for _,v in pairs(boltParts) do
+			v.Transparency = 0
+		end
+	end
+	for i = 1, 20 do
+		for _,v in pairs(boltParts) do
+			v.Transparency = (1 / 20) * i
+		end
+		wait(0.1)
+	end
+	for _,v in pairs(boltParts) do
+		v:Destroy()
+	end
+end
+
+function WorldCycle()
+	local cycleRunner
+	local lastTick = tick()
+	local testTick = lastTick
+	CoroutineLauncher("Radio")
+	cycleRunner = RunService.Stepped:Connect(function()
+		local t = tick()
+		local hour, minute, second = string.sub(light.TimeOfDay, 1, 2), string.sub(light.TimeOfDay, 4, 5), string.sub(light.TimeOfDay, 7, 8)
+		local timeSinceLastTick = (t - lastTick)
+		for plrName, entry in pairs(gameData) do
+			local charBio = rep.CharacterBios:FindFirstChild(plrName)
+			if charBio then
+				local timePlayed = entry["Account"]["TimePlayed"]
+				local beforeLevel = math.floor(timePlayed / 1800)
+				timePlayed = timePlayed + timeSinceLastTick
+				local afterLevel = math.floor(timePlayed / 1800)
+				gameData[plrName]["Account"]["TimePlayed"] = timePlayed
+				if afterLevel > beforeLevel then
+					charBio.Level.Value = afterLevel
+					local plr = game.Players:FindFirstChild(plrName)
+					if plr then
+						SaveData(plr.UserId, gameData[plrName]["Account"], DataStore)
+						rep.ServerNotification:FireClient(plr, "You are now level "..afterLevel.."!", afterLevel)
+					elseif gameData[plrName] then
+						gameData[plrName] = nil
+					end
+				end
+			end
+		end
+		timeSinceLastTick = timeSinceLastTick * timeSpeed
+		lastTick = t
+		second = second + timeSinceLastTick
+		weatherCounter = weatherCounter + 0.00001
+		if not omniToolProcess["Weather"] then
+			weather = (math.noise(weatherCounter, 0.051, 1.323) + 1) * 0.5
+			if currentWeather == "Clear" and (weather >= PWL and weather < BWL) then
+				currentWeather = weatherTable[math.random(#weatherTable)]
+				weatherSettings.Weather.Value = currentWeather
+				if currentWeather == "Sandstorm" then
+					rep.WeatherUpdate:FireAllClients("Sandstorm")
+				end
+			elseif currentWeather ~= "Clear" and weather < PWL then
+				currentWeather = "Clear"
+				weatherSettings.Weather.Value = currentWeather
+				rep.WeatherUpdate:FireAllClients("Clear")
+				if clouds[1].Transparency ~= 1 then
+					for _,cloud in pairs(clouds) do
+						cloud.Transparency = 1
+					end
+				end
+			elseif currentWeather == "Stormfront" and weather > BWL then
+				currentWeather = cloudPathTable[math.random(#cloudPathTable)]
+				weatherSettings.Weather.Value = currentWeather
+			elseif cloudPathways[currentWeather] and (weather >= PWL and weather < BWL) then
+				currentWeather = "Stormfront"
+				weatherSettings.Weather.Value = currentWeather
+			elseif currentWeather == "Sandstorm" and weather > PWL then
+				weatherSettings.Weather.Value = currentWeather
+			end
+		else
+			uWeather = (math.noise(weatherCounter, 0.051, 1.323) + 1) * 0.5
+		end
+		if currentWeather ~= "Clear" and weather >= PWL then
+			if (weather < BWL and weather >= PWL) and currentWeather == "Stormfront" then
+				local cloudCover = (weather - PWL) / (BWL - PWL)
+				for _,cloud in pairs(clouds) do
+					cloud.Transparency = 1 - cloudCover
+				end
+				weatherSettings.Severity.Value = cloudCover
+			elseif weather >= BWL and cloudPathways[currentWeather] then
+				weatherSettings.Severity.Value = (weather - BWL) / (1 - BWL)
+			elseif currentWeather == "Sandstorm" then
+				weatherSettings.Severity.Value = (weather - PWL) / (1 - PWL)
+			elseif currentWeather == "Tornado" then
+				--not yet programmed
+			end
+			if (currentWeather == "Stormy" or currentWeather == "Lightning") and weather >= BWL then
+				if (t - lastLightningBolt) >= timeBetweenLightningBolts then
+					lastLightningBolt = t
+					timeBetweenLightningBolts = ((1 - ((weather - BWL) / (1 - BWL))) * 30) + math.random(1, 10)
+					CoroutineLauncher("GenerateLightning")
+				end
+			end
+		end
+		
+		if not omniToolProcess["Time"] then
+			if second >= 60 then
+				second = second - 60
+				minute = minute + 1
+				if minute >= 60 then
+					CoroutineLauncher("CodesUpdate")
+					minute = 0
+					hour = hour + 1
+					if hour >= 24 then
+						hour = 0
+					elseif timeSpeed ~= nightSpeed and hour >= hourTwilightBegin then
+						timeSpeed = nightSpeed
+					elseif timeSpeed ~= daySpeed and (hour >= hourMorningBegin and hour < hourTwilightBegin) then
+						timeSpeed = daySpeed
+					end
+					if hour == 7 then
+						for _,lamp in pairs(lampPosts) do
+							lamp.Light.Material = Enum.Material.Ice
+							lamp.Light.BrickColor = BrickColor.new("Black")
+							lamp.Light.Light.Enabled = false
+						end
+					elseif hour == 18 then
+						for _,lamp in pairs(lampPosts) do
+							lamp.Light.Material = Enum.Material.Neon
+							lamp.Light.Color = lamp.Light.PreferredPartColor.Value
+							lamp.Light.Light.Brightness = lamp.Light.PreferredBrightness.Value
+							lamp.Light.Light.Color = lamp.Light.PreferredLightColor.Value
+							lamp.Light.Light.Enabled = true
+						end
+					end
+					if hour == hourMorningEnd and gameId ~= fl2Id then
+						CoroutineLauncher("Announcement")
+					end
+				end
+			end
+			light.TimeOfDay = hour..":"..minute..":"..second
+		end
+		
+		for _,v in pairs(seatConnections) do
+			if v[1]:FindFirstChild("VehicleSeat") then
+				if v[1].Parent.Parent and v[1].VehicleSeat.Occupant then
+					--local velocity = v[1].VehicleSeat.Throttle * v[1].VehicleSeat.speed.Value
+					--v[1].PrimaryWeld.Running.PlaybackSpeed = 1 + math.max(math.min((velocity / 75), 1), 0)
+					v[1].PrimaryWeld.Running.PlaybackSpeed = 1 + math.max(math.min(v[1].PrimaryWeld.Velocity.magnitude / 75, 1), 0)
+				end
+			end
+		end
+	end)
+end
+
+function NewLightningSegment(previousPart, width)
+	local newPart = serv.Lightning:Clone()
+	newPart.Size = Vector3.new(width, math.random(8, 40), width)
+	newPart.CFrame = previousPart.CFrame * CFrame.new(0, -previousPart.Size.Y * 0.5, 0)
+	local r = newPart.Orientation
+	local xRot = math.random(-89 - r.X, 89 - r.X)
+	local zRot = math.random(-89 - r.Z, 89 - r.Z)
+	newPart.CFrame = newPart.CFrame * CFrame.Angles(math.rad(xRot), 0, math.rad(zRot))
+	newPart.CFrame = newPart.CFrame * CFrame.new(0, -newPart.Size.Y * 0.5, 0)
+	return newPart
+end
+
+-----------------------------------------------------------------------------INTERACTIVES
+
+function InteractDoor(door, rotationMode)
+	local rotation = -1
+	local goalCF = door.GoalCF.Value
+	if rotationMode == "ReverseDoor" then
+		rotation = 1
+	end
+	local newVal = "Open"
+	if door.Mode.Value == "Open" then
+		newVal = "Closed"
+		if rotationMode == "ReverseDoor" then
+			rotation, goalCF = -1, door.StartCF.Value
+		else
+			rotation, goalCF = 1, door.StartCF.Value
+		end
+	end
+	door.Debounce.Value = true
+	door.Mode.Value = newVal
+	local soundPlayed = false
+	local startT = tick()
+	local startCF = door.PrimaryPart.CFrame
+	local objectRunner 
+	if newVal == "Open" then
+		CoroutineLauncher("PlaySound", door.PrimaryPart, "InteractiveSounds", "DoorOpen", 1, {95, 105})
+		soundPlayed = true
+	end
+	objectRunner = RunService.Stepped:connect(function()
+		if door.Parent then
+			local interval = math.min(((tick() - startT) / 0.5) * 90, 90)
+			door:SetPrimaryPartCFrame(startCF * CFrame.Angles(0, math.rad(interval * rotation), 0))
+			if not soundPlayed and interval >= 20 then
+				CoroutineLauncher("PlaySound", door.PrimaryPart, "InteractiveSounds", "DoorClose", 1, {95, 105})
+				soundPlayed = true
+			end
+			if interval == 90 then
+				door:SetPrimaryPartCFrame(goalCF)
+				objectRunner:disconnect()
+				wait(0.4)
+				door.Debounce.Value = false
+			end
+		else
+			objectRunner:Disconnect()
+		end
+	end)
+end
+
+function InteractLight(button)
+	local lamp = button.Parent
+	lamp.Debounce.Value = true
+	local newMat, newColor, newSetting, lightColor, brightness
+	for _,v in pairs(lamp:GetChildren()) do
+		local light = v:FindFirstChild("Light")
+		if light then
+			newMat, newColor, newSetting, lightColor, brightness = Enum.Material.Neon, v.PreferredPartColor.Value, 
+				true, v.PreferredLightColor.Value, v.PreferredBrightness.Value
+			if lamp.Activated.Value then
+				newMat, newColor, newSetting = Enum.Material.Ice, Color3.fromRGB(27, 42, 53), false
+				if gameId == fl2Id then
+					CoroutineLauncher("PlaySound", button, "InteractiveSounds", "FireplaceOff", 0, {105, 115}, 0.5, 0.2)
+				end
+			elseif not lamp.Activated.Value and gameId == fl2Id then
+				CoroutineLauncher("PlaySound", button, "InteractiveSounds", "FireplaceOn", 0, {105, 115}, 0.5, 0.2)
+			else
+				CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ToggleButton1", 0, {95, 105})
+			end
+			lamp.Activated.Value = newSetting
+			light.Color = lightColor
+			light.Brightness = brightness
+			light.Enabled = newSetting
+			v.Material = newMat
+			v.Color = newColor
+		end
+	end
+	wait(0.2)
+	lamp.Debounce.Value = false
+end
+
+function InteractLightRoom(button)
+	local lamp = button.Parent
+	lamp.Debounce.Value = true
+	local newMat, newColor, newSetting, rotation = Enum.Material.Neon, BrickColor.new("White"), true, -90
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ToggleButton1", 0, {95, 105})
+	if lamp.Activated.Value then
+		newMat, newColor, newSetting, rotation = Enum.Material.Ice, BrickColor.new("Black"), false, 90
+	end
+	lamp.Activated.Value = newSetting
+	for _,v in pairs(lamp.Parent:GetChildren()) do
+		local light = v:FindFirstChild("Light")
+		if light then
+			if newSetting and light:FindFirstChild("DesiredColor") then
+				newColor = light.DesiredColor.Value
+			end
+			light.Light.Enabled = newSetting
+			light.Material = newMat
+			light.BrickColor = newColor
+		end
+	end
+	lamp:SetPrimaryPartCFrame(lamp.PrimaryPart.CFrame * CFrame.Angles(math.rad(rotation), 0, 0))
+	wait(0.2)
+	lamp.Debounce.Value = false
+end
+
+function InteractCandle(button)
+	local candle = button.Parent
+	candle.Debounce.Value = true
+	local newSetting = true
+	if candle.Activated.Value then
+		newSetting = false
+	end
+	candle.Activated.Value = newSetting
+	for _,v in pairs(candle.Fire:GetChildren()) do
+		v.Enabled = newSetting
+	end
+	wait(0.2)
+	candle.Debounce.Value = false
+end
+
+function InteractRadio(button)
+	local radio = button.Parent
+	radio.Debounce.Value = true
+	if radio.Activated.Value then
+		radio.Speaker.Track.Volume = 0
+		radio.Speaker.Announcement.Volume = 0
+		radio.Activated.Value = false
+	else
+		if radio.Speaker.MusicRunning.Value then
+			radio.Speaker.Track.Volume = 1
+		else
+			radio.Speaker.Announcement.Volume = 1
+		end
+		radio.Activated.Value = true
+	end
+	wait(0.2)
+	radio.Debounce.Value = false
+end
+
+function InteractFire(button)
+	local fireplace = button.Parent
+	fireplace.Debounce.Value = true
+	local newSetting = true
+	local sound
+	if fireplace.Activated.Value then
+		newSetting = false
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "FireplaceOff", 0, {95, 105}, 0.5, 0.2)
+	else
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "FireplaceOn", 0, {95, 105}, 0.5, 0.2)
+		sound = serv.InteractiveSounds.Fireplace:clone()
+		sound.Parent = fireplace.Fire
+		sound:Play()
+	end
+	fireplace.Activated.Value = newSetting
+	for _,v in pairs(fireplace:GetChildren()) do
+		for _,n in pairs(v:GetChildren()) do
+			if not n:IsA("Sound") then
+				n.Enabled = newSetting
+			end
+		end
+	end
+	wait(0.2)
+	fireplace.Debounce.Value = false
+	if newSetting then
+		while fireplace.Parent and fireplace.Activated.Value do
+			wait()
+		end
+		sound:Stop()
+		sound:Destroy()
+	end
+end
+
+function InteractChair(clickedPart, char)
+	if char then
+		local chair = clickedPart.Parent
+		if chair.Occupied.Value then
+			return
+		end
+		local seatPart = clickedPart
+		if not clickedPart:FindFirstChild("SeatPart") then
+			for _,v in pairs(chair:GetChildren()) do
+				if v:FindFirstChild("SeatPart") then
+					seatPart = v
+					break
+				end
+			end
+		end
+		char:SetPrimaryPartCFrame(seatPart.CFrame * CFrame.new(0, 1.8, 0))
+		local w = Instance.new("Weld")
+		w.Part0 = seatPart
+		w.Part1 = char.PrimaryPart
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+		w.Name = "SeatWeld"
+		w.Parent = w.Part1
+		char.Humanoid.PlatformStand = true
+	end
+end
+
+function InteractDrawgate(clickedPart, char)
+	if clickedPart.Parent.Debounce.Value then
+		return
+	end
+	local gateModel = clickedPart.Parent.Parent
+	local gate = gateModel.Gate
+	clickedPart.Parent.Debounce.Value = true
+	local movement, newMode, limit, rot = 0.05, "Up", "UpperLimit", -5
+	if clickedPart.Parent.Mode.Value == "Up" then
+		movement, newMode, limit, rot = -0.05, "Down", "LowerLimit", 5
+	end
+	clickedPart.Parent.Mode.Value = newMode
+	limit = gateModel:findFirstChild(limit)
+	local objectRunner 
+	local lastInterval = tick()
+	local sound = serv.InteractiveSounds.Spin:clone()
+	sound.Parent = clickedPart
+	sound:Play()
+	local ropes = {}
+	for _,v in pairs(gateModel:GetChildren()) do
+		if string.find(v.Name, "Rope") then
+			ropes[#ropes + 1] = v
+		end
+	end
+	objectRunner = RunService.Stepped:connect(function()
+		local t = tick()
+		if (t - lastInterval) >= 0.04 then
+			local currentRot = gateModel.Turn1.CurrentRot
+			gate:SetPrimaryPartCFrame(gate.PrimaryPart.CFrame + Vector3.new(0, movement, 0))
+			gateModel.Turn1:SetPrimaryPartCFrame(gateModel.Turn1.PrimaryPart.CFrame * 
+				CFrame.Angles(math.rad(rot * gateModel.Turn1.RotDirection.Value), 0, 0))
+			gateModel.GateGoals:SetPrimaryPartCFrame(gateModel.GateGoals.PrimaryPart.CFrame * 
+				CFrame.Angles(math.rad(rot * gateModel.Turn1.RotDirection.Value), 0, 0))
+			currentRot.Value = currentRot.Value + (rot * gateModel.Turn1.RotDirection.Value)
+			if currentRot.Value >= 0 then
+				currentRot.Value = -90
+				gateModel.GateGoals:SetPrimaryPartCFrame(gateModel.GateGoals.PrimaryPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+			elseif currentRot.Value <= -90 then
+				currentRot.Value = 0
+				gateModel.GateGoals:SetPrimaryPartCFrame(gateModel.GateGoals.PrimaryPart.CFrame * CFrame.Angles(math.rad(90), 0, 0))
+			end
+			local turn2 = gateModel:FindFirstChild("Turn2")
+			if turn2 then
+				turn2:SetPrimaryPartCFrame(turn2.PrimaryPart.CFrame * 
+					CFrame.Angles(math.rad(rot * gateModel.Turn2.RotDirection.Value), 0, 0))
+				gateModel.Turn1Goals:SetPrimaryPartCFrame(gateModel.Turn1Goals.PrimaryPart.CFrame * 
+					CFrame.Angles(math.rad(rot * gateModel.Turn1.RotDirection.Value), 0, 0))
+				gateModel.Turn2Goals:SetPrimaryPartCFrame(gateModel.Turn2Goals.PrimaryPart.CFrame * 
+					CFrame.Angles(math.rad(rot * gateModel.Turn1.RotDirection.Value), 0, 0))
+				currentRot = turn2.CurrentRot
+				currentRot.Value = currentRot.Value + (rot * gateModel.Turn1.RotDirection.Value)
+				if currentRot.Value >= 0 then
+					currentRot.Value = -90
+					gateModel.Turn1Goals:SetPrimaryPartCFrame(gateModel.Turn1Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+					gateModel.Turn2Goals:SetPrimaryPartCFrame(gateModel.Turn2Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+				elseif currentRot.Value <= -90 then
+					currentRot.Value = 0
+					gateModel.Turn1Goals:SetPrimaryPartCFrame(gateModel.Turn1Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(90), 0, 0))
+					gateModel.Turn2Goals:SetPrimaryPartCFrame(gateModel.Turn2Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(90), 0, 0))
+				end
+				local turn3 = gateModel:FindFirstChild("Turn3")
+				if turn3 then
+					turn3:SetPrimaryPartCFrame(turn3.PrimaryPart.CFrame * CFrame.Angles(math.rad(rot * turn3.RotDirection.Value), 0, 0))
+					gateModel.Turn4:SetPrimaryPartCFrame(gateModel.Turn4.PrimaryPart.CFrame * 
+						CFrame.Angles(math.rad(rot * gateModel.Turn4.RotDirection.Value), 0, 0))
+					gateModel.Turn3Goals:SetPrimaryPartCFrame(gateModel.Turn3Goals.PrimaryPart.CFrame * 
+						CFrame.Angles(math.rad(rot * gateModel.Turn3.RotDirection.Value), 0, 0))
+					gateModel.Turn4Goals:SetPrimaryPartCFrame(gateModel.Turn4Goals.PrimaryPart.CFrame * 
+						CFrame.Angles(math.rad(rot * gateModel.Turn3.RotDirection.Value), 0, 0))
+					currentRot = turn3.CurrentRot
+					currentRot.Value = currentRot.Value + (rot * gateModel.Turn3.RotDirection.Value)
+					if currentRot.Value >= 0 then
+						currentRot.Value = -90
+						gateModel.Turn3Goals:SetPrimaryPartCFrame(gateModel.Turn3Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+						gateModel.Turn4Goals:SetPrimaryPartCFrame(gateModel.Turn4Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(-90), 0, 0))
+					elseif currentRot.Value <= -90 then
+						currentRot.Value = 0
+						gateModel.Turn3Goals:SetPrimaryPartCFrame(gateModel.Turn3Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(90), 0, 0))
+						gateModel.Turn4Goals:SetPrimaryPartCFrame(gateModel.Turn4Goals.PrimaryPart.CFrame * CFrame.Angles(math.rad(90), 0, 0))
+					end
+				end
+			end
+			for _,v in pairs(ropes) do
+				local sP, eP
+				if string.find(v.Name, "Gate") then
+					sP, eP = gate:FindFirstChild(v.Name.."Start").CFrame.p, 
+						gateModel.GateGoals:FindFirstChild(v.Name.."End").CFrame.p
+					v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+					v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+				elseif string.find(v.Name, "Turn1") then
+					sP, eP = gateModel.Turn1Goals:FindFirstChild(v.Name.."Start").CFrame.p, 
+						gateModel.Turn2Goals:FindFirstChild(v.Name.."End").CFrame.p
+					v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+					v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+				elseif string.find(v.Name, "Turn3") then
+					sP, eP = gateModel.Turn3Goals:FindFirstChild(v.Name.."Start").CFrame.p, 
+						gateModel.Turn4Goals:FindFirstChild(v.Name.."End").CFrame.p
+					v.Size = Vector3.new(v.Size.X, v.Size.Y, (sP - eP).magnitude)
+					v.CFrame = CFrame.new(((sP + eP) * 0.5), eP)
+				end
+			end
+		end
+		if (limit.CFrame.p - gate.PrimaryPart.CFrame.p).magnitude < 0.1 then
+			objectRunner:disconnect()
+			CoroutineLauncher("PlaySound", gate.PrimaryPart, "InteractiveSounds", "DoorClose", 0, {50, 60}, 0.8, 0.2)
+			sound:Destroy()
+			wait(0.4)
+			clickedPart.Parent.Debounce.Value = false
+		end
+	end)
+end
+
+function InteractBed(clickedPart, char)
+	if char then
+		local bed = clickedPart.Parent
+		if bed.Occupied.Value then
+			return
+		end
+		local seatPart = clickedPart
+		if not clickedPart:FindFirstChild("SeatPart") then
+			for _,v in pairs(bed:GetChildren()) do
+				if v:FindFirstChild("SeatPart") then
+					seatPart = v
+					break
+				end
+			end
+			
+		end
+		char:SetPrimaryPartCFrame(seatPart.CFrame * CFrame.new(0, 0, 0.8) * CFrame.Angles(math.rad(90), 0, 0) + Vector3.new(0, 1.2, 0))
+		local w = Instance.new("Weld")
+		w.Part0 = seatPart
+		w.Part1 = char.PrimaryPart
+		w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+		w.Name = "SeatWeld"
+		w.Parent = w.Part1
+		char.Humanoid.PlatformStand = true
+		--[[if char:FindFirstChild("Torso") then
+			char.Torso.Name = "CollisionPart"
+		end]]
+	end
+end
+
+function rep.JumpedOutOfResting.OnServerInvoke(plr)
+	local char = plr.Character
+	if char then
+		char.Humanoid.PlatformStand = false
+		--[[local collisionPart = char:FindFirstChild("CollisionPart")
+		if collisionPart then
+			collisionPart.Name = "Torso"
+		end]]
+		local seatWeld = char.PrimaryPart:FindFirstChild("SeatWeld")
+		if seatWeld then
+			seatWeld:Destroy()
+		end
+	end
+end
+
+function InteractElevator(button, lift)
+	if button.Direction.Value == lift.Mode.Value or lift.Debounce.Value or lift.Parent.Debounce.Value then
+		return
+	end
+	lift.Debounce.Value = true
+	lift.Parent.Debounce.Value = true
+	local movement, newMode, limit = 0.1, "Up", "UpperLimit"
+	if lift.Mode.Value == "Up" then
+		movement, newMode, limit = -0.1, "Down", "LowerLimit"
+	end
+	lift.Mode.Value = newMode
+	limit = lift.Parent:findFirstChild(limit)
+	local objectRunner 
+	local lastInterval = tick()
+	local sound = serv.InteractiveSounds.ElevatorRun:clone()
+	sound.Parent = lift.PrimaryPart
+	sound:Play()
+	CoroutineLauncher("PlaySound", lift.PrimaryPart, "InteractiveSounds", "ElevatorButton", 1, {95, 105})
+	objectRunner = RunService.Stepped:connect(function()
+		local t = tick()
+		if (t - lastInterval) >= 0.04 then
+			lift:SetPrimaryPartCFrame(lift.PrimaryPart.CFrame + Vector3.new(0, movement, 0))
+		end
+		if (limit.CFrame.p - lift.PrimaryPart.CFrame.p).magnitude < 0.1 then
+			objectRunner:disconnect()
+			CoroutineLauncher("PlaySound", lift.PrimaryPart, "InteractiveSounds", "ElevatorStop", 0, {75, 85})
+			sound:Destroy()
+			wait(0.4)
+			lift.Debounce.Value = false
+			lift.Parent.Debounce.Value = false
+		end
+	end)
+end
+
+function InteractStove(button)
+	local stove = button.Parent
+	stove.Debounce.Value = true
+	local color, material = Color3.new(163/255, 75/255, 75/255), Enum.Material.Neon
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ElevatorButton", 1, {95, 105})
+	if stove.Activated.Value then
+		local matVal = stove.OriginalMaterial.Value
+		color, material = stove.OriginalColor.Value, mats[string.sub(matVal, 15, string.len(matVal))]
+		stove.Activated.Value = false
+	else
+		stove.Activated.Value = true
+	end
+	for _,v in pairs(stove:GetChildren()) do
+		if v.Name == "HeatedPad" then
+			v.Color = color
+			v.Material = material
+		end
+	end
+	wait(0.2)
+	stove.Debounce.Value = false
+end
+
+function InteractDrawer(button)
+	local drawer = button.Parent
+	drawer.Debounce.Value = true
+	local goalCF = drawer.OutCF.Value
+	if drawer.Drawn.Value then
+		drawer.Drawn.Value = false
+		goalCF = drawer.InCF.Value
+	else
+		drawer.Drawn.Value = true
+	end
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "Drawer", 0, {95, 105})
+	local startT = tick()
+	local startCF = drawer.PrimaryPart.CFrame
+	local objectRunner
+	objectRunner = RunService.Stepped:connect(function()
+		if drawer.Parent then
+			local interval = math.min((tick() - startT) / 0.4, 1)
+			drawer:SetPrimaryPartCFrame(startCF:lerp(goalCF, interval))
+			if interval == 1 then
+				objectRunner:Disconnect()
+				wait(0.2)
+				drawer.Debounce.Value = false
+			end
+		else
+			objectRunner:Disconnect()
+		end
+	end)
+end
+
+function InteractComputer(button)
+	local tower = button.Parent
+	tower.Debounce.Value = true
+	local computer = tower.Parent
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ElevatorButton", 0, {95, 105})
+	local color, material = BrickColor.new("Steel blue"), Enum.Material.Neon
+	if tower.Activated.Value then
+		tower.Activated.Value = false
+		color, material = BrickColor.new("Black"), Enum.Material.Metal
+	else
+		tower.Activated.Value = true
+		local sound = serv.InteractiveSounds.ComputerRunning:Clone()
+		sound.PlaybackSpeed = math.random(95, 105) / 100
+		sound.Parent = button
+		sound:Play()
+		local objectRunner
+		objectRunner = RunService.Stepped:connect(function()
+			if tower:FindFirstChild("Activated") then
+				if not tower.Activated.Value then
+					objectRunner:Disconnect()
+					sound:Destroy()
+				end
+			else
+				objectRunner:Disconnect()
+			end
+		end)
+	end
+	for _,v in pairs(computer:GetChildren()) do
+		if v.Name == "Monitor" then
+			v.Screen.BrickColor = color
+			v.Screen.Material = material
+		end
+	end
+	wait(0.2)
+	tower.Debounce.Value = false
+end
+
+function InteractSink(button)
+	local sink = button.Parent
+	sink.Debounce.Value = true
+	if sink.Activated.Value then
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "SinkKnob", 1, {95, 105})
+		sink.Activated.Value = false
+		sink.RunWater.Transparency = 1
+	else
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "SinkKnob", 1, {95, 105})
+		sink.Activated.Value = true
+		sink.RunWater.Transparency = 0.5
+		local sound = serv.InteractiveSounds.SinkWater:Clone()
+		sound.PlaybackSpeed = math.random(95, 105) / 100
+		sound.Parent = button
+		sound:Play()
+		local objectRunner
+		objectRunner = RunService.Stepped:connect(function()
+			if sink:FindFirstChild("Activated") then
+				if not sink.Activated.Value then
+					objectRunner:Disconnect()
+					sound:Destroy()
+				end
+			else
+				objectRunner:Disconnect()
+			end
+		end)
+	end
+	wait(0.5)
+	sink.Debounce.Value = false
+end
+
+function InteractToilet(button)
+	local toilet = button.Parent
+	toilet.Debounce.Value = true
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ToiletFlush", 0, {95, 105})
+	wait(5)
+	toilet.Water.Transparency = 1
+	wait(4)
+	toilet.Water.Transparency = 0.5
+	toilet.Debounce.Value = false
+end
+
+function InteractShower(button)
+	local shower = button.Parent
+	shower.Debounce.Value = true
+	if shower.Activated.Value then
+		shower.Activated.Value = false
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "SinkKnob", 1, {95, 105})
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ShowerStop", 1, {95, 105})
+		shower.RunWater.Transparency = 1
+		shower.Water.Transparency = 1
+	else
+		shower.Activated.Value = true
+		CoroutineLauncher("PlaySound", button, "InteractiveSounds", "SinkKnob", 1, {95, 105})
+		shower.RunWater.Transparency = 0.7
+		shower.Water.Transparency = 0.5
+		local sound = serv.InteractiveSounds.ShowerWater:Clone()
+		sound.PlaybackSpeed = math.random(95, 105) / 100
+		sound.Parent = button
+		sound:Play()
+		local objectRunner
+		objectRunner = RunService.Stepped:connect(function()
+			if shower:FindFirstChild("Activated") then
+				if not shower.Activated.Value then
+					objectRunner:Disconnect()
+					sound:Destroy()
+				end
+			else
+				objectRunner:Disconnect()
+			end
+		end)
+	end
+	wait(0.4)
+	shower.Debounce.Value = false
+end
+
+function InteractElectricDoor(button)
+	local doorModel = button.Parent
+	doorModel.Debounce.Value = true
+	local goal1CF, goal2CF = doorModel.Door1.OutCF.Value, doorModel.Door2.OutCF.Value
+	if doorModel.Open.Value then
+		doorModel.Open.Value = false
+		goal1CF = doorModel.Door1.InCF.Value
+		goal2CF = doorModel.Door2.InCF.Value
+	else
+		doorModel.Open.Value = true
+	end
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ButtonBeep", 0, {95, 105})
+	wait(1)
+	CoroutineLauncher("PlaySound", button, "InteractiveSounds", "ElectricDoor", 0, {95, 105})
+	wait(0.4)
+	local firstT = tick()
+	local start1CF, start2CF = doorModel.Door1.PrimaryPart.CFrame, doorModel.Door2.PrimaryPart.CFrame
+	local objectRunner
+	objectRunner = RunService.Stepped:connect(function()
+		local interval = math.min((tick() - firstT) / 2, 1)
+		doorModel.Door1:SetPrimaryPartCFrame(start1CF:lerp(goal1CF, interval))
+		doorModel.Door2:SetPrimaryPartCFrame(start2CF:lerp(goal2CF, interval))
+		if interval == 1 then
+			objectRunner:Disconnect()
+			wait(0.2)
+			doorModel.Debounce.Value = false
+		end
+	end)
+end
+
+WorldCycle()

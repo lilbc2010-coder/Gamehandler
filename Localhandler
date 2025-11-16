@@ -777,6 +777,11 @@ function ClickAction()
 							sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"], 
 							sTZ = propSlider["tZ"]}
 						script.GUISounds.BuildSound:Play()
+						-- Remove highlight before destroying prop
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
 						dragProp["Prop"]:Destroy()
 						dragProp["Prop"] = nil
 						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
@@ -1012,20 +1017,7 @@ function ChangePropMode(input)
 				dragProp["Mode"] = "Tune"
 				propFrame.TuningFrame.Visible = true
 				propFrame.MobilePropFrame.MovementButton.Button.Text = "Tuning Mode"
-				-- Only update Location if this is a fresh prop (not re-editing a placed one)
-				-- When re-editing, Location was already calculated as the base position
-				-- Check if we have existing transformations (indicating a re-edit)
-				local hasExistingTransforms = (dragProp["rX"] ~= 0 or dragProp["rY"] ~= 0 or dragProp["rZ"] ~= 0 or
-					dragProp["tX"] ~= 0 or dragProp["tY"] ~= 0 or dragProp["tZ"] ~= 0)
-				if not hasExistingTransforms then
-					-- Fresh prop - set Location to current position
-					dragProp["Location"] = dragProp["Prop"].PrimaryPart.CFrame
-				else
-					-- Re-editing a placed prop - apply existing transformations to current position
-					dragProp["Prop"].Prop:SetPrimaryPartCFrame(dragProp["Location"] *
-						CFrame.new(propSlider["tX"], propSlider["tY"], propSlider["tZ"]) *
-						CFrame.Angles(propSlider["rX"], 0, propSlider["rZ"]) * CFrame.Angles(0, propSlider["rY"], 0))
-				end
+				dragProp["Location"] = dragProp["Prop"].PrimaryPart.CFrame
 			else
 				dragProp["Mode"] = "Drag"
 				propFrame.TuningFrame.Visible = false
@@ -1079,19 +1071,19 @@ function PickUpPropForEditing(placedProp)
 	local propTemplate = rep.Props:FindFirstChild(placedProp.Name)
 	if not propTemplate then return end
 
-	-- Create a new draggable version with saved settings
+	-- Create a new draggable version - start fresh with no transformations
 	-- Start in Drag mode so player can move it with cursor
 	dragProp = {
 		Mode = "Drag",
 		RefMode = propData["RefMode"],
 		Prop = propTemplate:Clone(),
 		Location = CFrame.new(),
-		rX = propData["rX"],
-		rY = propData["rY"],
-		rZ = propData["rZ"],
-		tX = propData["tX"],
-		tY = propData["tY"],
-		tZ = propData["tZ"]
+		rX = 0,
+		rY = 0,
+		rZ = 0,
+		tX = 0,
+		tY = 0,
+		tZ = 0
 	}
 
 	-- Set up the prop container (same as when initially selecting a prop)
@@ -1107,35 +1099,32 @@ function PickUpPropForEditing(placedProp)
 	ScanProp(dragProp["Prop"])
 	dragProp["Prop"].Parent = work
 
-	-- Restore slider positions from saved data (these represent cumulative edits)
+	-- Reset all sliders to center position (0 transformations)
 	for _, v in pairs({"Rot", "Translate"}) do
 		for _, n in pairs({"X", "Y", "Z"}) do
 			local slider = propFrame.TuningFrame:FindFirstChild(v.."Frame"..n).Slider
-			local p = propData["s"..string.sub(v, 1, 1)..n]
-			local absSize = (slider.Parent.AbsoluteSize.X - slider.AbsoluteSize.X)
-			if v == "Rot" then
-				p = ((math.deg(p) / 360) + 0.5) * absSize
-			else
-				p = ((p / 16) + 0.5) * absSize
-			end
-			slider.Position = UDim2.new(0, p, -.25, 0)
-			propSlider[string.lower(string.sub(v, 1, 1))..n] = propData["s"..string.sub(v, 1, 1)..n]
+			slider.Position = UDim2.new(0.45, 0, -.25, 0)
+			propSlider[string.lower(string.sub(v, 1, 1))..n] = 0
 		end
 	end
 
-	-- Calculate the original base Location (before transformations were applied)
-	-- This ensures that re-editing respects the cumulative adjustment limits
-	-- Formula: Base Location = Final CFrame * inverse(transformations)
-	local transformCFrame = CFrame.new(dragProp["tX"], dragProp["tY"], dragProp["tZ"]) *
-		CFrame.Angles(dragProp["rX"], 0, dragProp["rZ"]) * CFrame.Angles(0, dragProp["rY"], 0)
-	local baseLocation = placedPropCFrame * transformCFrame:inverse()
-
-	-- Set the base location so transformations are applied correctly when entering Tune mode
-	dragProp["Location"] = baseLocation
+	-- Set Location to the actual placed position (no need to calculate base)
+	-- Prop can be freely edited from this position
+	dragProp["Location"] = placedPropCFrame
 
 	-- Position the container (and inner prop) at the placed location with orientation preserved
 	-- Use container's PrimaryPart (falsePrimary) so the inner Prop model moves with it
 	dragProp["Prop"]:SetPrimaryPartCFrame(placedPropCFrame)
+
+	-- Create blue highlight for the selected prop
+	local highlight = Instance.new("SelectionBox")
+	highlight.Adornee = dragProp["Prop"]
+	highlight.Color3 = Color3.fromRGB(0, 100, 255)
+	highlight.SurfaceColor3 = Color3.fromRGB(0, 100, 255)
+	highlight.SurfaceTransparency = 0.7
+	highlight.LineThickness = 0.05
+	highlight.Parent = dragProp["Prop"]
+	dragProp["Highlight"] = highlight
 
 	-- Don't show tuning frame initially - player is in Drag mode
 	propFrame.TuningFrame.Visible = false
@@ -1224,9 +1213,9 @@ function UserInput()
 			elseif input.KeyCode == Enum.KeyCode.C then
 				CrouchAction()
 			elseif input.KeyCode == Enum.KeyCode.R then
-				-- Check if player is hovering over an owned prop with Prop Placer equipped
-				if equippedTool["Variant"] == "Prop Placer" and mouseState == "OwnedProp" and mouseTarget and
-					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
+				-- Check if player is hovering over an owned prop with Prop Placer equipped in Edit Mode
+				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Edit" and
+					mouseState == "OwnedProp" and mouseTarget and mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
 					-- Pick up the prop for editing
 					PickUpPropForEditing(mouseTarget.Parent)
 				else
@@ -3086,10 +3075,15 @@ function InitializeButton(v)
 						v.BackgroundColor3 = Color3.fromRGB(56, 92, 255)
 						v.Parent.BackgroundColor3 = Color3.fromRGB(33, 55, 153)
 					end
-				elseif v.Parent.Name == "PropButton" and propFrame.CountLabel.Count.Value ~= rep.PropLimit.Value and 
+				elseif v.Parent.Name == "PropButton" and propFrame.CountLabel.Count.Value ~= rep.PropLimit.Value and
 					propFrame.ModeButton.Button.Mode.Value == "Build" then
 					if dragProp["Mode"] then
 						dragProp["Mode"] = false
+						-- Remove highlight before destroying prop
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
 						dragProp["Prop"]:Destroy()
 						dragProp["Prop"] = nil
 					end
@@ -3123,16 +3117,24 @@ function InitializeButton(v)
 						v.Text = "Delete Mode"
 						if dragProp["Mode"] then
 							dragProp["Mode"] = false
+							-- Remove highlight before destroying prop
+							if dragProp["Highlight"] then
+								dragProp["Highlight"]:Destroy()
+								dragProp["Highlight"] = nil
+							end
 							dragProp["Prop"]:Destroy()
 							dragProp["Prop"] = nil
 						end
 					elseif v.Mode.Value == "Delete" then
+						v.Mode.Value = "Edit"
+						v.Text = "Edit Mode"
+					elseif v.Mode.Value == "Edit" then
 						v.Mode.Value = "SaveLoad"
 						v.Text = "Save/Load Mode"
 						propFrame.ScrollFrame.Visible = false
 						propFrame.LoadBuildFrame.Visible = true
 						propFrame.SaveClearButton.Button.Text = "Save Build"
-					else
+					elseif v.Mode.Value == "SaveLoad" then
 						v.Mode.Value = "Build"
 						v.Text = "Build Mode"
 						propFrame.ScrollFrame.Visible = true
@@ -5378,6 +5380,11 @@ function ResetTool()
 				end
 			end
 			if dragProp["Mode"] then
+				-- Remove highlight before destroying prop
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
+				end
 				dragProp["Prop"]:Destroy()
 				dragProp["Mode"] = nil
 				dragProp["RefMode"] = nil

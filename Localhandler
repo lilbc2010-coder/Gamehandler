@@ -1133,8 +1133,9 @@ function PickUpPropForEditing(placedProp)
 	-- Set the base location so transformations are applied correctly when entering Tune mode
 	dragProp["Location"] = baseLocation
 
-	-- Position the prop at its actual placed location with its orientation preserved
-	dragProp["Prop"].Prop:SetPrimaryPartCFrame(placedPropCFrame)
+	-- Position the container (and inner prop) at the placed location with orientation preserved
+	-- Use container's PrimaryPart (falsePrimary) so the inner Prop model moves with it
+	dragProp["Prop"]:SetPrimaryPartCFrame(placedPropCFrame)
 
 	-- Don't show tuning frame initially - player is in Drag mode
 	propFrame.TuningFrame.Visible = false

@@ -1030,6 +1030,93 @@ function ChangePropMode(input)
 	end
 end
 
+function PickUpPropForEditing(placedProp)
+	-- Find the prop data in our tracking table
+	local propData
+	local propDataIndex
+	for i, v in pairs(placedPropData) do
+		if v["Prop"] == placedProp then
+			propData = v
+			propDataIndex = i
+			break
+		end
+	end
+
+	if not propData then return end
+
+	-- Delete the placed prop from the server
+	placedProp.Owner.Value = ""
+	rep.PropDelete:FireServer(placedProp)
+	script.GUISounds.DeleteSound:Play()
+
+	-- Update the prop count
+	local countLabel = propFrame.CountLabel
+	countLabel.Count.Value = countLabel.Count.Value - 1
+	countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	countLabel.TextColor3 = Color3.new(0, 0, 0)
+	propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
+
+	-- Remove from placed prop data tracking
+	table.remove(placedPropData, propDataIndex)
+
+	-- Get the prop template from ReplicatedStorage
+	local propTemplate = rep.Props:FindFirstChild(placedProp.Name)
+	if not propTemplate then return end
+
+	-- Create a new draggable version with saved settings
+	dragProp = {
+		Mode = "Tune",
+		RefMode = propData["RefMode"],
+		Prop = propTemplate:Clone(),
+		Location = CFrame.new(),
+		rX = propData["rX"],
+		rY = propData["rY"],
+		rZ = propData["rZ"],
+		tX = propData["tX"],
+		tY = propData["tY"],
+		tZ = propData["tZ"]
+	}
+
+	-- Set up the prop container (same as when initially selecting a prop)
+	local container = Instance.new("Model")
+	container.Name = dragProp["Prop"].Name
+	dragProp["Prop"].Name = "Prop"
+	dragProp["Prop"].Parent = container
+	dragProp["Prop"] = container
+	local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+	falsePrimary.Parent = container
+	container.PrimaryPart = falsePrimary
+	ignoreList[#ignoreList + 1] = dragProp["Prop"]
+	ScanProp(dragProp["Prop"])
+	dragProp["Prop"].Parent = work
+
+	-- Restore slider positions from saved data
+	for _, v in pairs({"Rot", "Translate"}) do
+		for _, n in pairs({"X", "Y", "Z"}) do
+			local slider = propFrame.TuningFrame:FindFirstChild(v.."Frame"..n).Slider
+			local p = propData["s"..string.sub(v, 1, 1)..n]
+			local absSize = (slider.Parent.AbsoluteSize.X - slider.AbsoluteSize.X)
+			if v == "Rot" then
+				p = ((math.deg(p) / 360) + 0.5) * absSize
+			else
+				p = ((p / 16) + 0.5) * absSize
+			end
+			slider.Position = UDim2.new(0, p, -.25, 0)
+			propSlider[string.lower(string.sub(v, 1, 1))..n] = propData["s"..string.sub(v, 1, 1)..n]
+		end
+	end
+
+	-- Apply the saved transformations to the prop
+	dragProp["Location"] = dragProp["Prop"].Prop.PrimaryPart.CFrame
+	dragProp["Prop"].Prop:SetPrimaryPartCFrame(dragProp["Location"] *
+		CFrame.new(propSlider["tX"], propSlider["tY"], propSlider["tZ"]) *
+		CFrame.Angles(propSlider["rX"], 0, propSlider["rZ"]) * CFrame.Angles(0, propSlider["rY"], 0))
+
+	-- Show the tuning frame
+	propFrame.TuningFrame.Visible = true
+	propFrame.MobilePropFrame.MovementButton.Button.Text = "Tuning Mode"
+end
+
 function UserInput()
 	UIS.MouseIconEnabled = false
 	if UIS.TouchEnabled then
@@ -1112,8 +1199,16 @@ function UserInput()
 			elseif input.KeyCode == Enum.KeyCode.C then
 				CrouchAction()
 			elseif input.KeyCode == Enum.KeyCode.R then
-				ReloadAction()
-				ChangePropMode("Tuning")
+				-- Check if player is hovering over an owned prop with Prop Placer equipped
+				if equippedTool["Variant"] == "Prop Placer" and mouseState == "OwnedProp" and mouseTarget and
+					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
+					-- Pick up the prop for editing
+					PickUpPropForEditing(mouseTarget.Parent)
+				else
+					-- Normal reload or tuning mode toggle
+					ReloadAction()
+					ChangePropMode("Tuning")
+				end
 			elseif input.KeyCode == Enum.KeyCode.Q then
 				RelaxAction()
 			elseif input.KeyCode == Enum.KeyCode.Z and keyFunctions["zFunction"] then

@@ -1058,7 +1058,7 @@ function PickUpPropForEditing(placedProp)
 	if not propData then return end
 
 	-- IMPORTANT: Capture the placed prop's actual world CFrame BEFORE deleting it
-	local placedPropCFrame = placedProp.Prop.PrimaryPart.CFrame
+	local placedPropCFrame = placedProp.PrimaryPart.CFrame
 
 	-- Delete the placed prop from the server
 	placedProp.Owner.Value = ""

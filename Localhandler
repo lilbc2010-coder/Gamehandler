@@ -1050,7 +1050,18 @@ function PickUpPropForEditing(placedProp)
 		end
 	end
 
-	if not propData then return end
+	-- If prop not in tracking table (e.g., loaded from save), create default data
+	if not propData then
+		propData = {
+			Prop = placedProp,
+			RefMode = "Global",
+			rX = 0, rY = 0, rZ = 0,
+			tX = 0, tY = 0, tZ = 0,
+			sRX = 0, sRY = 0, sRZ = 0,
+			sTX = 0, sTY = 0, sTZ = 0
+		}
+		propDataIndex = nil  -- Won't remove from table since it wasn't in there
+	end
 
 	-- If we're already editing a prop, restore it first
 	if editingPropData and dragProp["Mode"] then
@@ -1111,25 +1122,28 @@ function PickUpPropForEditing(placedProp)
 	propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
 
 	-- Remove from placed prop data tracking (to prevent duplication)
-	table.remove(placedPropData, propDataIndex)
+	-- Only remove if it was in the tracking table
+	if propDataIndex then
+		table.remove(placedPropData, propDataIndex)
+	end
 
 	-- Get the prop template from ReplicatedStorage
 	local propTemplate = rep.Props:FindFirstChild(placedProp.Name)
 	if not propTemplate then return end
 
-	-- Create a new draggable version - preserve original transformations
+	-- Create a new draggable version - reset transformations to 0
 	-- Start in Drag mode so player can move it with cursor
 	dragProp = {
 		Mode = "Drag",
 		RefMode = propData["RefMode"],
 		Prop = propTemplate:Clone(),
 		Location = CFrame.new(),
-		rX = propData["rX"],
-		rY = propData["rY"],
-		rZ = propData["rZ"],
-		tX = propData["tX"],
-		tY = propData["tY"],
-		tZ = propData["tZ"]
+		rX = 0,
+		rY = 0,
+		rZ = 0,
+		tX = 0,
+		tY = 0,
+		tZ = 0
 	}
 
 	-- Set up the prop container (same as when initially selecting a prop)
@@ -1145,19 +1159,12 @@ function PickUpPropForEditing(placedProp)
 	ScanProp(dragProp["Prop"])
 	dragProp["Prop"].Parent = work
 
-	-- Restore slider positions to original values from saved prop data
+	-- Reset sliders to center position (0 transformations) when editing
 	for _, v in pairs({"Rot", "Translate"}) do
 		for _, n in pairs({"X", "Y", "Z"}) do
 			local slider = propFrame.TuningFrame:FindFirstChild(v.."Frame"..n).Slider
-			local p = propData["s"..string.sub(v, 1, 1)..n]
-			local absSize = (slider.Parent.AbsoluteSize.X - slider.AbsoluteSize.X)
-			if v == "Rot" then
-				p = ((math.deg(p) / 360) + 0.5) * absSize
-			else
-				p = ((p / 16) + 0.5) * absSize
-			end
-			slider.Position = UDim2.new(0, p, -.25, 0)
-			propSlider[string.lower(string.sub(v, 1, 1))..n] = propData["s"..string.sub(v, 1, 1)..n]
+			slider.Position = UDim2.new(0.45, 0, -.25, 0)
+			propSlider[string.lower(string.sub(v, 1, 1))..n] = 0
 		end
 	end
 
@@ -1169,12 +1176,12 @@ function PickUpPropForEditing(placedProp)
 	-- Use container's PrimaryPart (falsePrimary) so the inner Prop model moves with it
 	dragProp["Prop"]:SetPrimaryPartCFrame(placedPropCFrame)
 
-	-- Create blue outline highlight for the selected prop
+	-- Create blue outline highlight for the selected prop (local to this player only)
 	local highlight = Instance.new("Highlight")
 	highlight.Adornee = dragProp["Prop"]
 	highlight.FillTransparency = 1
 	highlight.OutlineColor = Color3.fromRGB(126, 193, 255)
-	highlight.Parent = dragProp["Prop"]
+	highlight.Parent = cam  -- Parent to camera to ensure it's local only
 	dragProp["Highlight"] = highlight
 
 	-- Don't show tuning frame initially - player is in Drag mode

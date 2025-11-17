@@ -431,18 +431,30 @@ function SitAction(tp, seatPart)
 	rep.CharacterSound:FireServer(p, floorMaterialSounds[currentFloorMaterial], 0, false)
 end
 
+function FindOccluderModel(startInstance)
+	-- Traverse up the hierarchy to find a model with an Occluder StringValue
+	local current = startInstance
+	while current and current ~= work do
+		local occluderValue = current:FindFirstChild("Occluder")
+		if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+			return current
+		end
+		current = current.Parent
+	end
+	return nil
+end
+
 function ClickAction()
 	local interacted = false
 
 	-- Handle Occluder Mode clicks
 	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget and mouseTarget.Parent then
 		local currentMode = propFrame.ModeButton.Button.Mode.Value
-		local model = mouseTarget.Parent
 
 		if currentMode == "Build" then
-			-- Check if the model has an Occluder StringValue with value "Occluded"
-			local occluderValue = model:FindFirstChild("Occluder")
-			if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+			-- Find the model with Occluder value (traversing up the hierarchy)
+			local model = FindOccluderModel(mouseTarget.Parent)
+			if model then
 				-- Store original properties before modifying
 				local partData = {}
 				for _, part in ipairs(model:GetDescendants()) do
@@ -487,9 +499,12 @@ function ClickAction()
 				return
 			end
 		elseif currentMode == "Delete" then
-			-- Check if the model is in the occludedModels list
-			for i, occludedData in ipairs(occludedModels) do
-				if occludedData.Model == model then
+			-- Find the model with Occluder value (traversing up the hierarchy)
+			local model = FindOccluderModel(mouseTarget.Parent)
+			if model then
+				-- Check if the model is in the occludedModels list
+				for i, occludedData in ipairs(occludedModels) do
+					if occludedData.Model == model then
 					-- Restore the model using stored properties
 					for part, properties in pairs(occludedData.PartData) do
 						if part and part.Parent then
@@ -523,7 +538,8 @@ function ClickAction()
 					notifierCount = notifierCount + 1
 					CoroutineLauncher("NotifierDelay")
 
-					return
+						return
+					end
 				end
 			end
 		end
@@ -1400,8 +1416,10 @@ function PickUpPropForEditing(placedProp)
 	-- Create blue outline highlight for the selected prop (local to this player only)
 	local highlight = Instance.new("Highlight")
 	highlight.Adornee = dragProp["Prop"]
-	highlight.FillTransparency = 1
-	highlight.OutlineColor = Color3.fromRGB(126, 193, 255)
+	highlight.FillColor = Color3.fromRGB(71, 129, 255)
+	highlight.FillTransparency = 0.9
+	highlight.OutlineColor = Color3.fromRGB(91, 152, 208)
+	highlight.OutlineTransparency = 0.3
 	highlight.Parent = cam  -- Parent to camera to ensure it's local only
 	dragProp["Highlight"] = highlight
 
@@ -1494,9 +1512,11 @@ function UserInput()
 			elseif input.KeyCode == Enum.KeyCode.R then
 				-- Check if player is hovering over an owned prop with Prop Placer equipped in Build Mode
 				-- Can only edit one prop at a time (editingPropData must be nil)
+				-- Don't edit the dragProp if in continuous placing mode
 				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Build" and
 					not editingPropData and mouseState == "OwnedProp" and mouseTarget and
-					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
+					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored and
+					(not dragProp["Prop"] or dragProp["Prop"] ~= mouseTarget.Parent) then
 					-- Pick up the prop for editing
 					PickUpPropForEditing(mouseTarget.Parent)
 				else
@@ -1521,13 +1541,44 @@ function UserInput()
 				end
 			elseif input.KeyCode == Enum.KeyCode.O then
 				-- Toggle Occluder Mode
-				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and
-					(propFrame.ModeButton.Button.Mode.Value == "Build" or propFrame.ModeButton.Button.Mode.Value == "Delete") then
+				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
 					occluderMode = not occluderMode
+					local currentMode = propFrame.ModeButton.Button.Mode.Value
 					if occluderMode then
 						notifier.Text = "OCCLUDER MODE: ON"
+						-- Hide prop list when Occluder Mode is on (except in Save/Load mode)
+						if currentMode ~= "SaveLoad" then
+							propFrame.ScrollFrame.Visible = false
+						end
+						-- Show occluded models if in Delete Mode
+						if currentMode == "Delete" then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = properties.Transparency
+										part.Color = properties.Color
+										part.Material = properties.Material
+										part.Reflectance = properties.Reflectance
+									end
+								end
+							end
+						end
 					else
 						notifier.Text = "OCCLUDER MODE: OFF"
+						-- Show prop list when Occluder Mode is off (except in Save/Load mode)
+						if currentMode ~= "SaveLoad" then
+							propFrame.ScrollFrame.Visible = true
+						end
+						-- Hide occluded models if in Delete Mode
+						if currentMode == "Delete" then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = 1
+									end
+								end
+							end
+						end
 						-- Remove any existing highlight when turning off
 						if occluderHighlight then
 							occluderHighlight:Destroy()
@@ -2416,8 +2467,8 @@ function SaveFile(v)
 				notifier.Text = "LOADED"
 				if typeof(loadedData) == "number" then
 					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData
-					-- Clear old occluded models list (old instances are gone)
-					occludedModels = {}
+					-- Restore all occluded models before clearing (in case any still exist)
+					RestoreAllOccludedModels()
 					-- Note: Auto-occluding loaded props would require server-side support
 					-- Models with Occluder="Occluded" can be manually occluded after load
 					propFrame.CountLabel.Text = tostring(loadedData) .."/".. tostring(rep.PropLimit.Value)
@@ -3484,14 +3535,16 @@ function InitializeButton(v)
 							-- Clear editing data without restoring
 							editingPropData = nil
 						end
-						-- Show occluded models in Delete Mode with original appearance (but keep collisions off)
-						for _, occludedData in ipairs(occludedModels) do
-							for part, properties in pairs(occludedData.PartData) do
-								if part and part.Parent then
-									part.Transparency = properties.Transparency
-									part.Color = properties.Color
-									part.Material = properties.Material
-									part.Reflectance = properties.Reflectance
+						-- Show occluded models in Delete Mode ONLY if Occluder Mode is on
+						if occluderMode then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = properties.Transparency
+										part.Color = properties.Color
+										part.Material = properties.Material
+										part.Reflectance = properties.Reflectance
+									end
 								end
 							end
 						end
@@ -3501,11 +3554,13 @@ function InitializeButton(v)
 						propFrame.ScrollFrame.Visible = false
 						propFrame.LoadBuildFrame.Visible = true
 						propFrame.SaveClearButton.Button.Text = "Save Build"
-						-- Hide occluded models when leaving Delete Mode
-						for _, occludedData in ipairs(occludedModels) do
-							for part, properties in pairs(occludedData.PartData) do
-								if part and part.Parent then
-									part.Transparency = 1
+						-- Hide occluded models when leaving Delete Mode (only if they were visible)
+						if occluderMode then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = 1
+									end
 								end
 							end
 						end
@@ -6443,12 +6498,12 @@ stepconnection = RunService.RenderStepped:Connect(function()
 			-- Check if in Occluder Mode and hovering over an occludable model
 			local isOccludableModel = false
 			if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget.Parent then
-				local model = mouseTarget.Parent
 				local currentMode = propFrame.ModeButton.Button.Mode.Value
 
 				if currentMode == "Build" then
-					local occluderValue = model:FindFirstChild("Occluder")
-					if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+					-- Find the model with Occluder value (traversing up the hierarchy)
+					local model = FindOccluderModel(mouseTarget.Parent)
+					if model then
 						-- Check if NOT already occluded
 						local isAlreadyOccluded = false
 						for _, occludedData in ipairs(occludedModels) do
@@ -6462,10 +6517,14 @@ stepconnection = RunService.RenderStepped:Connect(function()
 						end
 					end
 				elseif currentMode == "Delete" then
-					for _, occludedData in ipairs(occludedModels) do
-						if occludedData.Model == model then
-							isOccludableModel = true
-							break
+					-- Find the model with Occluder value (traversing up the hierarchy)
+					local model = FindOccluderModel(mouseTarget.Parent)
+					if model then
+						for _, occludedData in ipairs(occludedModels) do
+							if occludedData.Model == model then
+								isOccludableModel = true
+								break
+							end
 						end
 					end
 				end
@@ -6501,39 +6560,48 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
 		local currentMode = propFrame.ModeButton.Button.Mode.Value
 		local shouldHighlight = false
-		local highlightColor = Color3.fromRGB(255, 0, 0) -- Red for Build Mode
+		local highlightModel = nil
+		local fillColor, outlineColor
 
 		if currentMode == "Build" and mouseTarget and mouseTarget.Parent then
-			-- Check if the model has an Occluder StringValue with value "Occluded"
-			local model = mouseTarget.Parent
-			local occluderValue = model:FindFirstChild("Occluder")
-			if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+			-- Find the model with Occluder value (traversing up the hierarchy)
+			local model = FindOccluderModel(mouseTarget.Parent)
+			if model then
 				shouldHighlight = true
-				highlightColor = Color3.fromRGB(255, 0, 0) -- Red
+				fillColor = Color3.fromRGB(255, 0, 0)  -- Red for Build Mode
+				outlineColor = Color3.fromRGB(208, 20, 24)
+				highlightModel = model
 			end
 		elseif currentMode == "Delete" and mouseTarget and mouseTarget.Parent then
-			-- Check if the model is in the occludedModels list
-			local model = mouseTarget.Parent
-			for _, occludedData in ipairs(occludedModels) do
-				if occludedData.Model == model then
-					shouldHighlight = true
-					highlightColor = Color3.fromRGB(0, 0, 255) -- Blue
-					break
+			-- Find the model with Occluder value (traversing up the hierarchy)
+			local model = FindOccluderModel(mouseTarget.Parent)
+			if model then
+				-- Check if the model is in the occludedModels list
+				for _, occludedData in ipairs(occludedModels) do
+					if occludedData.Model == model then
+						shouldHighlight = true
+						fillColor = Color3.fromRGB(71, 129, 255)  -- Blue for Delete Mode
+						outlineColor = Color3.fromRGB(91, 152, 208)
+						highlightModel = model
+						break
+					end
 				end
 			end
 		end
 
 		if shouldHighlight then
-			if not occluderHighlight or occluderHighlight.Adornee ~= mouseTarget.Parent then
+			if not occluderHighlight or occluderHighlight.Adornee ~= highlightModel then
 				-- Remove old highlight if it exists
 				if occluderHighlight then
 					occluderHighlight:Destroy()
 				end
 				-- Create new highlight
 				occluderHighlight = Instance.new("Highlight")
-				occluderHighlight.Adornee = mouseTarget.Parent
-				occluderHighlight.FillTransparency = 1
-				occluderHighlight.OutlineColor = highlightColor
+				occluderHighlight.Adornee = highlightModel
+				occluderHighlight.FillColor = fillColor
+				occluderHighlight.FillTransparency = 0.9
+				occluderHighlight.OutlineColor = outlineColor
+				occluderHighlight.OutlineTransparency = 0.3
 				occluderHighlight.Parent = cam
 			end
 		elseif occluderHighlight then

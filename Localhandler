@@ -2416,6 +2416,10 @@ function SaveFile(v)
 				notifier.Text = "LOADED"
 				if typeof(loadedData) == "number" then
 					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData
+					-- Clear old occluded models list (old instances are gone)
+					occludedModels = {}
+					-- Note: Auto-occluding loaded props would require server-side support
+					-- Models with Occluder="Occluded" can be manually occluded after load
 					propFrame.CountLabel.Text = tostring(loadedData) .."/".. tostring(rep.PropLimit.Value)
 				else
 					LoadData(loadedData)
@@ -2432,6 +2436,22 @@ function SaveFile(v)
 		end
 		GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 	end
+end
+
+function RestoreAllOccludedModels()
+	-- Restore all occluded models to their original state
+	for _, occludedData in ipairs(occludedModels) do
+		for part, properties in pairs(occludedData.PartData) do
+			if part and part.Parent then
+				part.Transparency = properties.Transparency
+				part.CanCollide = properties.CanCollide
+				part.Color = properties.Color
+				part.Material = properties.Material
+				part.Reflectance = properties.Reflectance
+			end
+		end
+	end
+	occludedModels = {}
 end
 
 function ChangeBodyColor()
@@ -3558,6 +3578,8 @@ function InitializeButton(v)
 					SaveFile(v)
 				elseif v:IsDescendantOf(GUI.ClearPropsFrame) then
 					if v.Parent.Name == "Confirm" then
+						-- Restore all occluded models before clearing
+						RestoreAllOccludedModels()
 						rep.PropsCleared_Client:FireServer()
 						script.GUISounds.DeleteSound:Play()
 						ResetPropCount()
@@ -6583,6 +6605,11 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		game.Lighting.Brightness = 0
 		game.Lighting.TimeOfDay = 0
 	end
+end)
+
+-- Cleanup occluded models when player leaves
+game:BindToClose(function()
+	RestoreAllOccludedModels()
 end)
 
 RunService.Heartbeat:Connect(function(step)

@@ -6607,11 +6607,6 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- Cleanup occluded models when player leaves
-game:BindToClose(function()
-	RestoreAllOccludedModels()
-end)
-
 RunService.Heartbeat:Connect(function(step)
 	if char.PrimaryPart and char.PrimaryPart.Velocity.Magnitude > 500 then
 		char.PrimaryPart.Velocity = Vector3.new(0, 0, 0)

@@ -226,6 +226,33 @@ anims["stand"]:Play()
 local mouseTarget, mouseHit, mouseNormal, characterBioName
 local mouseCooldown = false
 
+-- Helper function to find the Occluder value in a placed prop
+function FindOccluderValue(model)
+	-- Check if the model itself has Occluder
+	local occluder = model:FindFirstChild("Occluder")
+	if occluder and occluder:IsA("StringValue") then
+		return occluder
+	end
+
+	-- Check if there's a "Prop" model inside (common structure: Container > Prop > Occluder)
+	local propModel = model:FindFirstChild("Prop")
+	if propModel then
+		occluder = propModel:FindFirstChild("Occluder")
+		if occluder and occluder:IsA("StringValue") then
+			return occluder
+		end
+	end
+
+	-- Search through all descendants as fallback
+	for _, child in pairs(model:GetDescendants()) do
+		if child.Name == "Occluder" and child:IsA("StringValue") then
+			return child
+		end
+	end
+
+	return nil
+end
+
 function SprintAction(inputMethod)
 	if inputMethod == "Keyboard" then
 		mKs["LeftShift"] = true

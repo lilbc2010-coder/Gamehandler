@@ -1169,13 +1169,11 @@ function PickUpPropForEditing(placedProp)
 	-- Use container's PrimaryPart (falsePrimary) so the inner Prop model moves with it
 	dragProp["Prop"]:SetPrimaryPartCFrame(placedPropCFrame)
 
-	-- Create blue highlight for the selected prop
-	local highlight = Instance.new("SelectionBox")
+	-- Create blue outline highlight for the selected prop
+	local highlight = Instance.new("Highlight")
 	highlight.Adornee = dragProp["Prop"]
-	highlight.Color3 = Color3.fromRGB(0, 100, 255)
-	highlight.SurfaceColor3 = Color3.fromRGB(0, 100, 255)
-	highlight.SurfaceTransparency = 0.7
-	highlight.LineThickness = 0.05
+	highlight.FillTransparency = 1
+	highlight.OutlineColor = Color3.fromRGB(126, 193, 255)
 	highlight.Parent = dragProp["Prop"]
 	dragProp["Highlight"] = highlight
 
@@ -1266,9 +1264,11 @@ function UserInput()
 			elseif input.KeyCode == Enum.KeyCode.C then
 				CrouchAction()
 			elseif input.KeyCode == Enum.KeyCode.R then
-				-- Check if player is hovering over an owned prop with Prop Placer equipped in Edit Mode
-				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Edit" and
-					mouseState == "OwnedProp" and mouseTarget and mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
+				-- Check if player is hovering over an owned prop with Prop Placer equipped in Build Mode
+				-- Can only edit one prop at a time (editingPropData must be nil)
+				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Build" and
+					not editingPropData and mouseState == "OwnedProp" and mouseTarget and
+					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored then
 					-- Pick up the prop for editing
 					PickUpPropForEditing(mouseTarget.Parent)
 				else
@@ -3182,19 +3182,8 @@ function InitializeButton(v)
 						v.Mode.Value = "Delete"
 						v.Text = "Delete Mode"
 						if dragProp["Mode"] then
-							-- If we're editing a prop, restore it before switching modes
-							if editingPropData then
-								rep.PropPlace:InvokeServer(work, editingPropData.OriginalCFrame, editingPropData.RefMode,
-									editingPropData.rX, editingPropData.rY, editingPropData.rZ,
-									editingPropData.tX, editingPropData.tY, editingPropData.tZ,
-									editingPropData.sRX, editingPropData.sRY, editingPropData.sRZ,
-									editingPropData.sTX, editingPropData.sTY, editingPropData.sTZ,
-									editingPropData.PropName)
-								local countLabel = propFrame.CountLabel
-								countLabel.Count.Value = countLabel.Count.Value + 1
-								countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
-								editingPropData = nil
-							end
+							-- If we're editing a prop, just destroy it without restoring
+							-- (switching to Delete Mode acts like canceling the edit)
 							dragProp["Mode"] = false
 							-- Remove highlight before destroying prop
 							if dragProp["Highlight"] then
@@ -3203,11 +3192,10 @@ function InitializeButton(v)
 							end
 							dragProp["Prop"]:Destroy()
 							dragProp["Prop"] = nil
+							-- Clear editing data without restoring
+							editingPropData = nil
 						end
 					elseif v.Mode.Value == "Delete" then
-						v.Mode.Value = "Edit"
-						v.Text = "Edit Mode"
-					elseif v.Mode.Value == "Edit" then
 						v.Mode.Value = "SaveLoad"
 						v.Text = "Save/Load Mode"
 						propFrame.ScrollFrame.Visible = false

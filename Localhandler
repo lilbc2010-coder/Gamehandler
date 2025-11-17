@@ -6514,7 +6514,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		elseif currentMode == "Delete" and mouseTarget and mouseTarget.Parent then
 			-- Check if the model is in the occludedModels list
 			local model = mouseTarget.Parent
-			for _, occludedData in ipairs(occludedDatas) do
+			for _, occludedData in ipairs(occludedModels) do
 				if occludedData.Model == model then
 					shouldHighlight = true
 					highlightColor = Color3.fromRGB(0, 0, 255) -- Blue

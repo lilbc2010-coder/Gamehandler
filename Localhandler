@@ -50,6 +50,7 @@ local fCooldown = false
 local editingPropData = nil
 local propPlacementTimes = {}
 local buildingBlocked = false
+local continuousPlacing = true
 local mat = Enum.Material
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
@@ -785,6 +786,38 @@ function ClickAction()
 						return
 					end
 
+					-- Check if trying to place inside another player
+					local propParts = dragProp["Prop"]:GetDescendants()
+					local touchingPlayers = false
+					for _, part in ipairs(propParts) do
+						if part:IsA("BasePart") then
+							local touching = part:GetTouchingParts()
+							for _, touchedPart in ipairs(touching) do
+								if touchedPart.Parent and touchedPart.Parent:FindFirstChild("Humanoid") then
+									-- Found a player character
+									local touchedPlayer = game.Players:GetPlayerFromCharacter(touchedPart.Parent)
+									if touchedPlayer and touchedPlayer ~= plr then
+										touchingPlayers = true
+										break
+									end
+								end
+							end
+							if touchingPlayers then break end
+						end
+					end
+					if touchingPlayers then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
 					-- Check rate limiting (2 props per second)
 					local currentTime = tick()
 					-- Remove placements older than 1 second
@@ -841,6 +874,8 @@ function ClickAction()
 							propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
 						end
 
+					-- Check if continuous placing is enabled
+					if continuousPlacing then
 						-- CONTINUOUS PLACING: Keep the same prop selected
 						-- Destroy the old drag prop and create a new one of the same type
 						local propName = dragProp["Prop"].Name
@@ -878,6 +913,16 @@ function ClickAction()
 						dragProp["Prop"].Parent = work
 
 						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+					else
+						-- Non-continuous: Deselect the prop
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+						dragProp["Prop"] = nil
+						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+					end
 					else
 						dragProp["Mode"] = previousMode
 					end
@@ -1361,6 +1406,19 @@ function UserInput()
 				end
 			elseif input.KeyCode == Enum.KeyCode.Q then
 				RelaxAction()
+			elseif input.KeyCode == Enum.KeyCode.B then
+				-- Toggle continuous prop placing
+				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
+					continuousPlacing = not continuousPlacing
+					if continuousPlacing then
+						notifier.Text = "CONTINUOUS PLACING: ON"
+					else
+						notifier.Text = "CONTINUOUS PLACING: OFF"
+					end
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+				end
 			elseif input.KeyCode == Enum.KeyCode.Z and keyFunctions["zFunction"] then
 				ToolEffect(keyFunctions["zFunction"]["Effect"], "zFunction")
 			elseif input.KeyCode == Enum.KeyCode.Y and keyFunctions["yFunction"] then

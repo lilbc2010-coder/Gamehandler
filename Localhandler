@@ -453,12 +453,14 @@ function ClickAction()
 				-- Add to occluded models list
 				table.insert(occludedModels, model)
 
-				-- Add 1 to prop limit (decrease count to free up a slot)
+				-- Take up 1 prop slot
 				local countLabel = propFrame.CountLabel
-				countLabel.Count.Value = countLabel.Count.Value - 1
+				countLabel.Count.Value = countLabel.Count.Value + 1
 				countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
-				countLabel.TextColor3 = Color3.new(0, 0, 0)
-				propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
+				if countLabel.Count.Value == rep.PropLimit.Value then
+					countLabel.TextColor3 = Color3.new(1, 0, 0)
+					propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
+				end
 
 				-- Remove the highlight
 				if occluderHighlight then
@@ -489,14 +491,12 @@ function ClickAction()
 					-- Remove from occluded models list
 					table.remove(occludedModels, i)
 
-					-- Subtract 1 from prop used
+					-- Free up 1 prop slot
 					local countLabel = propFrame.CountLabel
-					countLabel.Count.Value = countLabel.Count.Value + 1
+					countLabel.Count.Value = countLabel.Count.Value - 1
 					countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
-					if countLabel.Count.Value == rep.PropLimit.Value then
-						countLabel.TextColor3 = Color3.new(1, 0, 0)
-						propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
-					end
+					countLabel.TextColor3 = Color3.new(0, 0, 0)
+					propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
 
 					-- Remove the highlight
 					if occluderHighlight then
@@ -3451,18 +3451,42 @@ function InitializeButton(v)
 							-- Clear editing data without restoring
 							editingPropData = nil
 						end
+						-- Show occluded models in Delete Mode (but keep collisions off)
+						for _, model in ipairs(occludedModels) do
+							for _, part in ipairs(model:GetDescendants()) do
+								if part:IsA("BasePart") then
+									part.Transparency = 0
+								end
+							end
+						end
 					elseif v.Mode.Value == "Delete" then
 						v.Mode.Value = "SaveLoad"
 						v.Text = "Save/Load Mode"
 						propFrame.ScrollFrame.Visible = false
 						propFrame.LoadBuildFrame.Visible = true
 						propFrame.SaveClearButton.Button.Text = "Save Build"
+						-- Hide occluded models when leaving Delete Mode
+						for _, model in ipairs(occludedModels) do
+							for _, part in ipairs(model:GetDescendants()) do
+								if part:IsA("BasePart") then
+									part.Transparency = 1
+								end
+							end
+						end
 					elseif v.Mode.Value == "SaveLoad" then
 						v.Mode.Value = "Build"
 						v.Text = "Build Mode"
 						propFrame.ScrollFrame.Visible = true
 						propFrame.LoadBuildFrame.Visible = false
 						propFrame.SaveClearButton.Button.Text = "Clear All Props"
+						-- Ensure occluded models are hidden in Build Mode
+						for _, model in ipairs(occludedModels) do
+							for _, part in ipairs(model:GetDescendants()) do
+								if part:IsA("BasePart") then
+									part.Transparency = 1
+								end
+							end
+						end
 					end
 				elseif v:IsDescendantOf(propFrame) and string.find(v.Parent.Name, "Build") then
 					GUI.ConfirmSaveLoadFrame.Label.Text = "Are you sure you want to load '"..v.Text.."'?"
@@ -6377,17 +6401,42 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 		if mouseTarget then
 			local isHumanoid = CheckIfPartIsHumanoid(mouseTarget)
+
+			-- Check if in Occluder Mode and hovering over an occludable model
+			local isOccludableModel = false
+			if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget.Parent then
+				local model = mouseTarget.Parent
+				local currentMode = propFrame.ModeButton.Button.Mode.Value
+
+				if currentMode == "Build" then
+					local occluderValue = model:FindFirstChild("Occluder")
+					if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+						isOccludableModel = true
+					end
+				elseif currentMode == "Delete" then
+					for _, occludedModel in ipairs(occludedModels) do
+						if occludedModel == model then
+							isOccludableModel = true
+							break
+						end
+					end
+				end
+			end
+
 			if mouseTarget.Name == "Click" then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = ""
-			elseif mouseTarget.Name == "OwnedProp" then
+			elseif mouseTarget.Name == "OwnedProp" and not isOccludableModel then
 				mouseState = "OwnedProp"
 				mouseIcon.NameTag.Text = ""
 			elseif isHumanoid then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = isHumanoid.Name
 			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or 
-				mouseTarget.Name == "Click" or isHumanoid) then
+				mouseTarget.Name == "Click" or isHumanoid or isOccludableModel) then
+				mouseState = "None"
+				mouseIcon.NameTag.Text = ""
+			elseif isOccludableModel and (mouseState == "Hovering" or mouseState == "OwnedProp") then
 				mouseState = "None"
 				mouseIcon.NameTag.Text = ""
 			end

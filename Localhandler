@@ -48,6 +48,8 @@ local rainSplashActive, bulletTrailActive, cloudsActive, precipitationActive = f
 local frameRate, frames = 30, 1
 local fCooldown = false
 local editingPropData = nil
+local propPlacementTimes = {}
+local buildingBlocked = false
 local mat = Enum.Material
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
@@ -767,27 +769,70 @@ function ClickAction()
 				end
 				if equippedTool["Variant"] == "Prop Placer" and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
 					local previousMode = dragProp["Mode"]
+					local propCFrame = dragProp["Prop"].Prop.PrimaryPart.CFrame
+
+					-- Check if trying to place below Y = 0
+					if propCFrame.Position.Y < 0 then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
+					-- Check rate limiting (2 props per second)
+					local currentTime = tick()
+					-- Remove placements older than 1 second
+					local newTimes = {}
+					for _, placeTime in ipairs(propPlacementTimes) do
+						if currentTime - placeTime < 1 then
+							table.insert(newTimes, placeTime)
+						end
+					end
+					propPlacementTimes = newTimes
+
+					-- Check if placing too fast
+					if #propPlacementTimes >= 2 then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "BUILDING TOO FAST"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
+					-- If blocked, don't allow placement
+					if buildingBlocked then
+						return
+					end
+
 					dragProp["Mode"] = false
 					propFrame.TuningFrame.Visible = false
-					local approvedProp = rep.PlaceProp:InvokeServer(dragProp["Prop"].Name, 
-						dragProp["Prop"].Prop.PrimaryPart.CFrame, mouseTarget)
+					local approvedProp = rep.PlaceProp:InvokeServer(dragProp["Prop"].Name, propCFrame, mouseTarget)
 					if approvedProp then
-						placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = dragProp["RefMode"], 
-							rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"], 
+						-- Track placement time
+						table.insert(propPlacementTimes, currentTime)
+
+						placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = dragProp["RefMode"],
+							rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"],
 							tY = dragProp["tY"], tZ = dragProp["tZ"], sRX = propSlider["rX"], sRY = propSlider["rY"],
-							sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"], 
+							sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"],
 							sTZ = propSlider["tZ"]}
 						script.GUISounds.BuildSound:Play()
-						-- Remove highlight before destroying prop
-						if dragProp["Highlight"] then
-							dragProp["Highlight"]:Destroy()
-							dragProp["Highlight"] = nil
-						end
-						dragProp["Prop"]:Destroy()
-						dragProp["Prop"] = nil
+
 						-- Clear editing prop data since we successfully placed it
 						editingPropData = nil
-						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+
+						-- Update count
 						local countLabel = propFrame.CountLabel
 						countLabel.Count.Value = countLabel.Count.Value + 1
 						countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
@@ -795,6 +840,20 @@ function ClickAction()
 							countLabel.TextColor3 = Color3.new(1, 0, 0)
 							propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
 						end
+
+						-- CONTINUOUS PLACING: Keep the same prop selected
+						-- Destroy the old drag prop and create a new one of the same type
+						local propName = dragProp["Prop"].Name
+						local refMode = dragProp["RefMode"]
+
+						-- Remove old highlight
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+
+						-- Reset transformations
 						for _,c in pairs({"RotFrame", "TranslateFrame"}) do
 							for _,v in pairs({"X", "Y", "Z"}) do
 								local slider = propFrame.TuningFrame:FindFirstChild(c..v).Slider
@@ -802,6 +861,23 @@ function ClickAction()
 								propSlider[string.lower(string.sub(c, 1, 1))..v] = 0
 							end
 						end
+
+						-- Create new prop instance of the same type
+						dragProp = {Mode = "Drag", RefMode = refMode, Prop = rep.Props:FindFirstChild(propName):Clone(),
+							Location = CFrame.new(), rX = 0, rY = 0, rZ = 0, tX = 0, tY = 0, tZ = 0}
+						local container = Instance.new("Model")
+						container.Name = dragProp["Prop"].Name
+						dragProp["Prop"].Name = "Prop"
+						dragProp["Prop"].Parent = container
+						dragProp["Prop"] = container
+						local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+						falsePrimary.Parent = container
+						container.PrimaryPart = falsePrimary
+						ignoreList[#ignoreList + 1] = dragProp["Prop"]
+						ScanProp(dragProp["Prop"])
+						dragProp["Prop"].Parent = work
+
+						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
 					else
 						dragProp["Mode"] = previousMode
 					end
@@ -3110,6 +3186,15 @@ function InitializeButton(v)
 					local item1, item2 = buttonText, vehicleFrame.VehicleColor.Value
 					if v.Parent.Name == "DeleteVehicleButton" then
 						item1, item2 = "Delete", nil
+					end
+
+					-- Check if trying to spawn vehicle below Y = 0
+					if item1 ~= "Delete" and char.HumanoidRootPart.Position.Y < 0 then
+						notifierCount = notifierCount + 1
+						notifier.Text = "UNAVAILABLE"
+						notifier.Visible = true
+						CoroutineLauncher("NotifierDelay")
+						return
 					end
 					notifier.Text = "LOADING"
 					notifier.Visible = true

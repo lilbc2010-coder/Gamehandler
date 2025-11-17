@@ -51,6 +51,9 @@ local editingPropData = nil
 local propPlacementTimes = {}
 local buildingBlocked = false
 local continuousPlacing = true
+local occluderMode = false
+local occludedModels = {}
+local occluderHighlight = nil
 local mat = Enum.Material
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
@@ -429,6 +432,90 @@ end
 
 function ClickAction()
 	local interacted = false
+
+	-- Handle Occluder Mode clicks
+	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget and mouseTarget.Parent then
+		local currentMode = propFrame.ModeButton.Button.Mode.Value
+		local model = mouseTarget.Parent
+
+		if currentMode == "Build" then
+			-- Check if the model has an Occluder StringValue with value "Occluded"
+			local occluderValue = model:FindFirstChild("Occluder")
+			if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+				-- Make the model transparent and remove collisions for everyone
+				for _, part in ipairs(model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Transparency = 1
+						part.CanCollide = false
+					end
+				end
+
+				-- Add to occluded models list
+				table.insert(occludedModels, model)
+
+				-- Add 1 to prop limit (decrease count to free up a slot)
+				local countLabel = propFrame.CountLabel
+				countLabel.Count.Value = countLabel.Count.Value - 1
+				countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+				countLabel.TextColor3 = Color3.new(0, 0, 0)
+				propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
+
+				-- Remove the highlight
+				if occluderHighlight then
+					occluderHighlight:Destroy()
+					occluderHighlight = nil
+				end
+
+				-- Notify player
+				notifier.Text = "MODEL OCCLUDED"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+
+				return
+			end
+		elseif currentMode == "Delete" then
+			-- Check if the model is in the occludedModels list
+			for i, occludedModel in ipairs(occludedModels) do
+				if occludedModel == model then
+					-- Restore the model (make it visible and add collisions back)
+					for _, part in ipairs(model:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.Transparency = 0
+							part.CanCollide = true
+						end
+					end
+
+					-- Remove from occluded models list
+					table.remove(occludedModels, i)
+
+					-- Subtract 1 from prop used
+					local countLabel = propFrame.CountLabel
+					countLabel.Count.Value = countLabel.Count.Value + 1
+					countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+					if countLabel.Count.Value == rep.PropLimit.Value then
+						countLabel.TextColor3 = Color3.new(1, 0, 0)
+						propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
+					end
+
+					-- Remove the highlight
+					if occluderHighlight then
+						occluderHighlight:Destroy()
+						occluderHighlight = nil
+					end
+
+					-- Notify player
+					notifier.Text = "MODEL RESTORED"
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+
+					return
+				end
+			end
+		end
+	end
+
 	if mouseState == "Hovering" or (mouseTarget and mouseTarget.Name == "Click") then
 		interacted = InteractiveAction()
 	elseif mouseState == "OwnedProp" or (mouseTarget and (platform == "Mobile" and mouseTarget.Name == "OwnedProp")) then
@@ -1414,6 +1501,25 @@ function UserInput()
 						notifier.Text = "CONTINUOUS PLACING: ON"
 					else
 						notifier.Text = "CONTINUOUS PLACING: OFF"
+					end
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+				end
+			elseif input.KeyCode == Enum.KeyCode.O then
+				-- Toggle Occluder Mode
+				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and
+					(propFrame.ModeButton.Button.Mode.Value == "Build" or propFrame.ModeButton.Button.Mode.Value == "Delete") then
+					occluderMode = not occluderMode
+					if occluderMode then
+						notifier.Text = "OCCLUDER MODE: ON"
+					else
+						notifier.Text = "OCCLUDER MODE: OFF"
+						-- Remove any existing highlight when turning off
+						if occluderHighlight then
+							occluderHighlight:Destroy()
+							occluderHighlight = nil
+						end
 					end
 					notifier.Visible = true
 					notifierCount = notifierCount + 1
@@ -6293,6 +6399,57 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 	end
+
+	-- Occluder Mode highlight handling
+	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
+		local currentMode = propFrame.ModeButton.Button.Mode.Value
+		local shouldHighlight = false
+		local highlightColor = Color3.fromRGB(255, 0, 0) -- Red for Build Mode
+
+		if currentMode == "Build" and mouseTarget and mouseTarget.Parent then
+			-- Check if the model has an Occluder StringValue with value "Occluded"
+			local model = mouseTarget.Parent
+			local occluderValue = model:FindFirstChild("Occluder")
+			if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+				shouldHighlight = true
+				highlightColor = Color3.fromRGB(255, 0, 0) -- Red
+			end
+		elseif currentMode == "Delete" and mouseTarget and mouseTarget.Parent then
+			-- Check if the model is in the occludedModels list
+			local model = mouseTarget.Parent
+			for _, occludedModel in ipairs(occludedModels) do
+				if occludedModel == model then
+					shouldHighlight = true
+					highlightColor = Color3.fromRGB(0, 0, 255) -- Blue
+					break
+				end
+			end
+		end
+
+		if shouldHighlight then
+			if not occluderHighlight or occluderHighlight.Adornee ~= mouseTarget.Parent then
+				-- Remove old highlight if it exists
+				if occluderHighlight then
+					occluderHighlight:Destroy()
+				end
+				-- Create new highlight
+				occluderHighlight = Instance.new("Highlight")
+				occluderHighlight.Adornee = mouseTarget.Parent
+				occluderHighlight.FillTransparency = 1
+				occluderHighlight.OutlineColor = highlightColor
+				occluderHighlight.Parent = cam
+			end
+		elseif occluderHighlight then
+			-- Remove highlight if no longer hovering over valid target
+			occluderHighlight:Destroy()
+			occluderHighlight = nil
+		end
+	elseif occluderHighlight then
+		-- Remove highlight if occluder mode is off
+		occluderHighlight:Destroy()
+		occluderHighlight = nil
+	end
+
 	if dragProp["Mode"] and mouseTarget then
 		if dragProp["Mode"] == "Drag" then
 			local cf = CFrame.new(mouseHit)

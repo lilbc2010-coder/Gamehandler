@@ -548,16 +548,31 @@ function ClickAction()
 	if mouseState == "Hovering" or (mouseTarget and mouseTarget.Name == "Click") then
 		interacted = InteractiveAction()
 	elseif mouseState == "OwnedProp" or (mouseTarget and (platform == "Mobile" and mouseTarget.Name == "OwnedProp")) then
-		if mouseTarget.Parent.Owner.Value == plr.Name and propFrame.Visible then 
+		if mouseTarget.Parent.Owner.Value == plr.Name and propFrame.Visible then
 			if propFrame.ModeButton.Button.Mode.Value == "Delete" and mouseTarget.Anchored then
-				mouseTarget.Parent.Owner.Value = ""
-				rep.PropDelete:FireServer(mouseTarget.Parent)
-				script.GUISounds.DeleteSound:Play()
-				local countLabel = propFrame.CountLabel
-				countLabel.Count.Value = countLabel.Count.Value - 1
-				countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
-				countLabel.TextColor3 = Color3.new(0, 0, 0)
-				countLabel.Parent.Label.TextColor3 = Color3.new(0, 0, 0)
+				-- Check if this model is in the occludedModels list
+				local isOccludedModel = false
+				local occludedModel = FindOccluderModel(mouseTarget.Parent)
+				if occludedModel then
+					for _, occludedData in ipairs(occludedModels) do
+						if occludedData.Model == occludedModel then
+							isOccludedModel = true
+							break
+						end
+					end
+				end
+
+				-- Only allow deletion if it's not an occluded model
+				if not isOccludedModel then
+					mouseTarget.Parent.Owner.Value = ""
+					rep.PropDelete:FireServer(mouseTarget.Parent)
+					script.GUISounds.DeleteSound:Play()
+					local countLabel = propFrame.CountLabel
+					countLabel.Count.Value = countLabel.Count.Value - 1
+					countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+					countLabel.TextColor3 = Color3.new(0, 0, 0)
+					countLabel.Parent.Label.TextColor3 = Color3.new(0, 0, 0)
+				end
 			elseif dragProp["Mode"] == "Orient" and mouseTarget.Anchored then
 				local primary = mouseTarget.Parent.PrimaryPart
 				local propData
@@ -3567,7 +3582,10 @@ function InitializeButton(v)
 					elseif v.Mode.Value == "SaveLoad" then
 						v.Mode.Value = "Build"
 						v.Text = "Build Mode"
-						propFrame.ScrollFrame.Visible = true
+						-- Only show prop list if Occluder Mode is off
+						if not occluderMode then
+							propFrame.ScrollFrame.Visible = true
+						end
 						propFrame.LoadBuildFrame.Visible = false
 						propFrame.SaveClearButton.Button.Text = "Clear All Props"
 						-- Ensure occluded models are hidden in Build Mode
@@ -6533,17 +6551,14 @@ stepconnection = RunService.RenderStepped:Connect(function()
 			if mouseTarget.Name == "Click" then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = ""
-			elseif mouseTarget.Name == "OwnedProp" and not isOccludableModel then
+			elseif mouseTarget.Name == "OwnedProp" then
 				mouseState = "OwnedProp"
 				mouseIcon.NameTag.Text = ""
 			elseif isHumanoid then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = isHumanoid.Name
-			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or 
+			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or
 				mouseTarget.Name == "Click" or isHumanoid or isOccludableModel) then
-				mouseState = "None"
-				mouseIcon.NameTag.Text = ""
-			elseif isOccludableModel and (mouseState == "Hovering" or mouseState == "OwnedProp") then
 				mouseState = "None"
 				mouseIcon.NameTag.Text = ""
 			end

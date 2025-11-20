@@ -1603,6 +1603,28 @@ function UserInput()
 					local currentMode = propFrame.ModeButton.Button.Mode.Value
 					if occluderMode then
 						notifier.Text = "OCCLUDER MODE: ON"
+						-- Clean up any selected/dragging prop
+						if dragProp["Mode"] and dragProp["Prop"] then
+							-- Remove from ignore list
+							for i, v in pairs(ignoreList) do
+								if v == dragProp["Prop"] then
+									table.remove(ignoreList, i)
+									break
+								end
+							end
+							-- Remove highlight
+							if dragProp["Highlight"] then
+								dragProp["Highlight"]:Destroy()
+								dragProp["Highlight"] = nil
+							end
+							-- Destroy the prop
+							dragProp["Prop"]:Destroy()
+							dragProp["Mode"] = nil
+							dragProp["RefMode"] = nil
+							dragProp["Prop"] = nil
+							-- Clear editing data
+							editingPropData = nil
+						end
 						-- If in SaveLoad mode, switch to Build mode
 						if currentMode == "SaveLoad" then
 							propFrame.ModeButton.Button.Mode.Value = "Build"
@@ -1668,6 +1690,37 @@ function UserInput()
 						if occluderHighlight then
 							occluderHighlight:Destroy()
 							occluderHighlight = nil
+						end
+					end
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+				end
+			elseif input.KeyCode == Enum.KeyCode.N then
+				-- Toggle Prop Placer UI on/off
+				if equippedTool["Variant"] == "Prop Placer" then
+					propFrame.Visible = not propFrame.Visible
+					if propFrame.Visible then
+						notifier.Text = "PROP PLACER: ON"
+					else
+						notifier.Text = "PROP PLACER: OFF"
+						-- Clean up any selected/dragging prop when hiding UI
+						if dragProp["Mode"] and dragProp["Prop"] then
+							for i, v in pairs(ignoreList) do
+								if v == dragProp["Prop"] then
+									table.remove(ignoreList, i)
+									break
+								end
+							end
+							if dragProp["Highlight"] then
+								dragProp["Highlight"]:Destroy()
+								dragProp["Highlight"] = nil
+							end
+							dragProp["Prop"]:Destroy()
+							dragProp["Mode"] = nil
+							dragProp["RefMode"] = nil
+							dragProp["Prop"] = nil
+							editingPropData = nil
 						end
 					end
 					notifier.Visible = true

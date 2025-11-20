@@ -286,6 +286,7 @@ end
 
 function InteractiveAction()
 	local interacted = false
+	print("[Friend Teleport Debug] InteractiveAction called, mouseTarget: " .. tostring(mouseTarget and mouseTarget.Name or "nil"))
 	if mouseTarget.Name == "Click" and not mouseCooldown and not mouseTarget.Parent.Debounce.Value and not propFrame.Visible then
 		interacted, mouseCooldown = true, true
 		local tp = mouseTarget.Parent:FindFirstChild("Type")
@@ -315,16 +316,25 @@ function InteractiveAction()
 		local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
 		local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
 
+		print("[Friend Teleport Debug] Clicked on player: " .. foreignPlr.Name)
+		print("[Friend Teleport Debug] Metavision On: " .. tostring(gameFrame.MetaFrame.On.Value))
+		print("[Friend Teleport Debug] Is Friend: " .. tostring(plr:IsFriendsWith(foreignPlrId)))
+
 		-- Check if metavision is on and player is a friend - show teleport prompt
 		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
+			print("[Friend Teleport Debug] Conditions met! Showing teleport frame")
 			if not tpFrame.Ready.Value then
 				tpFrame.Ready.Value = true
 				tpFrame.FriendTravel.Value = foreignPlr.Name
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
 				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
+			else
+				print("[Friend Teleport Debug] tpFrame.Ready.Value is already true")
 			end
 			return interacted
+		else
+			print("[Friend Teleport Debug] Conditions NOT met, showing normal bio frame")
 		end
 
 		local foreignCharImage = game.Players:GetUserThumbnailAsync(foreignPlrId, Enum.ThumbnailType.HeadShot,

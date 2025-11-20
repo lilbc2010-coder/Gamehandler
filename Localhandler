@@ -740,65 +740,78 @@ function ClickAction()
 		-- Place the prop
 		local refMode = dragProp["RefMode"]
 		local propName = dragProp["Prop"].Name
-		rep.PropPlace:InvokeServer(work, propCFrame, refMode,
-			dragProp["rX"], dragProp["rY"], dragProp["rZ"],
-			dragProp["tX"], dragProp["tY"], dragProp["tZ"], propName)
-		local countLabel = propFrame.CountLabel
-		countLabel.Count.Value = countLabel.Count.Value + 1
-		countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+		dragProp["Mode"] = false
+		propFrame.TuningFrame.Visible = false
+		local approvedProp = rep.PlaceProp:InvokeServer(propName, propCFrame, mouseTarget)
 
-		-- Handle editing restoration
-		if editingPropData then
+		if approvedProp then
+			-- Track placed prop data
+			placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = refMode,
+				rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"],
+				tY = dragProp["tY"], tZ = dragProp["tZ"], sRX = propSlider["rX"], sRY = propSlider["rY"],
+				sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"],
+				sTZ = propSlider["tZ"]}
+			script.GUISounds.BuildSound:Play()
+
+			-- Clear editing prop data
 			editingPropData = nil
-		end
 
-		-- Handle continuous placing or cleanup
-		if continuousPlacing and not editingPropData then
-			-- Remove from ignore list
-			for i, v in pairs(ignoreList) do
-				if v == dragProp["Prop"] then
-					table.remove(ignoreList, i)
-					break
+			-- Update count
+			local countLabel = propFrame.CountLabel
+			countLabel.Count.Value = countLabel.Count.Value + 1
+			countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+			if countLabel.Count.Value == rep.PropLimit.Value then
+				countLabel.TextColor3 = Color3.new(1, 0, 0)
+				propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
+			end
+
+			-- Handle continuous placing or cleanup
+			if continuousPlacing then
+				-- Remove from ignore list
+				for i, v in pairs(ignoreList) do
+					if v == dragProp["Prop"] then
+						table.remove(ignoreList, i)
+						break
+					end
 				end
-			end
-			if dragProp["Highlight"] then
-				dragProp["Highlight"]:Destroy()
-				dragProp["Highlight"] = nil
-			end
-			dragProp["Prop"]:Destroy()
-
-			-- Reset transformations
-			for _,c in pairs({"RotFrame", "TranslateFrame"}) do
-				for _,v in pairs({"X", "Y", "Z"}) do
-					local slider = propFrame.TuningFrame:FindFirstChild(c..v).Slider
-					slider.Position = UDim2.new(0.45, 0, -.25, 0)
-					propSlider[string.lower(string.sub(c, 1, 1))..v] = 0
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
 				end
-			end
+				dragProp["Prop"]:Destroy()
 
-			-- Create new prop instance
-			dragProp = {Mode = "Drag", RefMode = refMode, Prop = rep.Props:FindFirstChild(propName):Clone(),
-				Location = CFrame.new(), rX = 0, rY = 0, rZ = 0, tX = 0, tY = 0, tZ = 0}
-			local container = Instance.new("Model")
-			container.Name = dragProp["Prop"].Name
-			dragProp["Prop"].Name = "Prop"
-			dragProp["Prop"].Parent = container
-			dragProp["Prop"] = container
-			local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
-			falsePrimary.Parent = container
-			container.PrimaryPart = falsePrimary
-			ignoreList[#ignoreList + 1] = dragProp["Prop"]
-			ScanProp(dragProp["Prop"])
-			dragProp["Prop"].Parent = work
-		else
-			-- Non-continuous: Deselect the prop
-			if dragProp["Highlight"] then
-				dragProp["Highlight"]:Destroy()
-				dragProp["Highlight"] = nil
+				-- Reset transformations
+				for _,c in pairs({"RotFrame", "TranslateFrame"}) do
+					for _,v in pairs({"X", "Y", "Z"}) do
+						local slider = propFrame.TuningFrame:FindFirstChild(c..v).Slider
+						slider.Position = UDim2.new(0.45, 0, -.25, 0)
+						propSlider[string.lower(string.sub(c, 1, 1))..v] = 0
+					end
+				end
+
+				-- Create new prop instance
+				dragProp = {Mode = "Drag", RefMode = refMode, Prop = rep.Props:FindFirstChild(propName):Clone(),
+					Location = CFrame.new(), rX = 0, rY = 0, rZ = 0, tX = 0, tY = 0, tZ = 0}
+				local container = Instance.new("Model")
+				container.Name = dragProp["Prop"].Name
+				dragProp["Prop"].Name = "Prop"
+				dragProp["Prop"].Parent = container
+				dragProp["Prop"] = container
+				local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+				falsePrimary.Parent = container
+				container.PrimaryPart = falsePrimary
+				ignoreList[#ignoreList + 1] = dragProp["Prop"]
+				ScanProp(dragProp["Prop"])
+				dragProp["Prop"].Parent = work
+			else
+				-- Non-continuous: Deselect the prop
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
+				end
+				dragProp["Prop"]:Destroy()
+				dragProp["Prop"] = nil
 			end
-			dragProp["Prop"]:Destroy()
-			dragProp["Prop"] = nil
-			dragProp["Mode"] = nil
 		end
 		return
 	end

@@ -566,6 +566,12 @@ function ClickAction()
 	elseif mouseState == "OwnedProp" or (mouseTarget and (platform == "Mobile" and mouseTarget.Name == "OwnedProp")) then
 		if mouseTarget.Parent.Owner.Value == plr.Name and propFrame.Visible then
 			if propFrame.ModeButton.Button.Mode.Value == "Delete" and mouseTarget.Anchored then
+				-- When Occluder Mode is on, don't allow deleting placed props
+				if occluderMode then
+					-- Do nothing - props are protected in Occluder Mode
+					return
+				end
+
 				-- Check if this model/part is in the occludedModels list
 				local isOccludedModel = false
 				local occludedModel = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
@@ -1563,10 +1569,11 @@ function UserInput()
 				-- Check if player is hovering over an owned prop with Prop Placer equipped in Build Mode
 				-- Can only edit one prop at a time (editingPropData must be nil)
 				-- Don't edit the dragProp if in continuous placing mode
+				-- Don't allow editing when Occluder Mode is on
 				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Build" and
 					not editingPropData and mouseState == "OwnedProp" and mouseTarget and
 					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored and
-					(not dragProp["Prop"] or dragProp["Prop"] ~= mouseTarget.Parent) then
+					(not dragProp["Prop"] or dragProp["Prop"] ~= mouseTarget.Parent) and not occluderMode then
 					-- Pick up the prop for editing
 					PickUpPropForEditing(mouseTarget.Parent)
 				else
@@ -1601,7 +1608,6 @@ function UserInput()
 							propFrame.ModeButton.Button.Mode.Value = "Build"
 							propFrame.ModeButton.Button.Text = "Build Mode"
 							propFrame.LoadBuildFrame.Visible = false
-							propFrame.SaveClearButton.Button.Text = "Clear All Props"
 							-- Ensure occluded models are hidden in Build Mode
 							for _, occludedData in ipairs(occludedModels) do
 								for part, properties in pairs(occludedData.PartData) do
@@ -1611,6 +1617,8 @@ function UserInput()
 								end
 							end
 						end
+						-- Change Clear All Props to Restore Occlusions
+						propFrame.SaveClearButton.Button.Text = "Restore Occlusions"
 						-- Hide prop list when Occluder Mode is on
 						propFrame.ScrollFrame.Visible = false
 						-- Show occluded models if in Delete Mode
@@ -1628,6 +1636,8 @@ function UserInput()
 						end
 					else
 						notifier.Text = "OCCLUDER MODE: OFF"
+						-- Change Restore Occlusions back to Clear All Props
+						propFrame.SaveClearButton.Button.Text = "Clear All Props"
 						-- Show prop list when Occluder Mode is off (except in Save/Load mode)
 						if currentMode ~= "SaveLoad" then
 							propFrame.ScrollFrame.Visible = true
@@ -2498,7 +2508,16 @@ function SaveFile(v)
 			if string.find(slotName, "Char") then
 				newName = GUI.SaveLoadCharacterFrame.NameBox.Text
 			end
-			local approved = rep.SaveLoadPropsChar:InvokeServer("Save", slotName, newName)
+			-- Collect occluded model paths for prop saves
+			local occludedPaths = {}
+			if string.find(slotName, "Build") then
+				for _, occludedData in ipairs(occludedModels) do
+					if occludedData.Model and occludedData.Model.Parent then
+						table.insert(occludedPaths, occludedData.Model:GetFullName())
+					end
+				end
+			end
+			local approved = rep.SaveLoadPropsChar:InvokeServer("Save", slotName, newName, occludedPaths)
 			if approved then
 				GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 				if string.find(slotName, "Char") then
@@ -2530,7 +2549,58 @@ function SaveFile(v)
 			GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 			if loadedData then
 				notifier.Text = "LOADED"
-				if typeof(loadedData) == "number" then
+				if typeof(loadedData) == "table" and loadedData.PropCount then
+					-- Prop save loaded - update count
+					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData.PropCount
+					propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+					-- Re-occlude models from saved paths
+					if loadedData.OccludedModels and #loadedData.OccludedModels > 0 then
+						for _, modelPath in ipairs(loadedData.OccludedModels) do
+							-- Parse path and find the model
+							local pathParts = string.split(modelPath, ".")
+							local current = game
+							for _, part in ipairs(pathParts) do
+								if current then
+									current = current:FindFirstChild(part)
+								end
+							end
+							-- If model found, occlude it
+							if current and (current:IsA("Model") or current:IsA("BasePart")) then
+								local partData = {}
+								if current:IsA("BasePart") then
+									partData[current] = {
+										Transparency = current.Transparency,
+										CanCollide = current.CanCollide,
+										Color = current.Color,
+										Material = current.Material,
+										Reflectance = current.Reflectance
+									}
+									current.Transparency = 1
+									current.CanCollide = false
+								else
+									for _, part in ipairs(current:GetDescendants()) do
+										if part:IsA("BasePart") then
+											partData[part] = {
+												Transparency = part.Transparency,
+												CanCollide = part.CanCollide,
+												Color = part.Color,
+												Material = part.Material,
+												Reflectance = part.Reflectance
+											}
+											part.Transparency = 1
+											part.CanCollide = false
+										end
+									end
+								end
+								table.insert(occludedModels, {Model = current, PartData = partData})
+								-- Increment prop count for occluded model
+								propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + 1
+								propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+							end
+						end
+					end
+				elseif typeof(loadedData) == "number" then
+					-- Legacy format support
 					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData
 					propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
 				else
@@ -3696,6 +3766,17 @@ function InitializeButton(v)
 				elseif v.Parent.Name == "SaveClearButton" then
 					if v.Text == "Clear All Props" then
 						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
+					elseif v.Text == "Restore Occlusions" then
+						-- Only restore occluded models, don't clear placed props
+						local restoredCount = RestoreAllOccludedModels()
+						if restoredCount > 0 then
+							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUSION" .. (restoredCount > 1 and "S" or "")
+						else
+							notifier.Text = "NO OCCLUSIONS TO RESTORE"
+						end
+						notifier.Visible = true
+						notifierCount = notifierCount + 1
+						CoroutineLauncher("NotifierDelay")
 					else
 						GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 						GUI.SaveLoadPropsFrame:TweenPosition(UDim2.new(0.35, 0, 0.3, 0), "Out", "Sine", 0.2)

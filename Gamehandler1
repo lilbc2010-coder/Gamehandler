@@ -3062,7 +3062,7 @@ function rep.CheckCode.OnServerInvoke(plr, code)
 	end
 end
 
-function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
+function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2, input3)
 	if mode == "Save" then
 		local t = tick()
 		if (t - gameData[plr.Name]["Server"]["LastSave"]) > 15 then
@@ -3070,6 +3070,8 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 			if string.find(input1, "Build") then
 				gameData[plr.Name]["Account"]["PropSaves"][input1]["Name"] = input2
 				gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"] = {}
+				-- Store occluded model paths
+				gameData[plr.Name]["Account"]["PropSaves"][input1]["OccludedModels"] = input3 or {}
 				for _,v in pairs(gameData[plr.Name]["Server"]["PropsPlaced"]) do
 					if not v:FindFirstChild("Chassis") then
 						local signData = {}
@@ -3137,6 +3139,7 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 	elseif mode == "Load" then
 		if string.find(input1, "Build") then
 			local savedProps = gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]
+			local occludedPaths = gameData[plr.Name]["Account"]["PropSaves"][input1]["OccludedModels"] or {}
 			if #savedProps + #gameData[plr.Name]["Server"]["PropsPlaced"] <=
 				gameData[plr.Name]["Server"]["PropLimit"] and
 				(#savedProps == 0 or typeof(savedProps[1]) == "table") then
@@ -3147,7 +3150,8 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 						PlaceProp(plr.Name, prop, CFrame.new(unpack(v[2])), creationTime, v[3])
 					end
 				end
-				return #savedProps
+				-- Return prop count and occluded model paths
+				return {PropCount = #savedProps, OccludedModels = occludedPaths}
 			end
 		else
 			local loadout, dataBase

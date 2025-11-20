@@ -5232,6 +5232,38 @@ function MetavisionUpdater()
 	end
 end
 
+-- Testing function: Apply Highlight to dummy models
+-- Usage from command bar: game.Players.LocalPlayer.PlayerScripts.Localhandler.ApplyTestHighlight(workspace.DummyName, true)
+-- Second parameter: true for friend (green), false for stranger (default color)
+function ApplyTestHighlight(characterModel, isFriend)
+	if not characterModel or not characterModel:FindFirstChild("UpperTorso") then
+		warn("Invalid character model - must have UpperTorso")
+		return
+	end
+
+	-- Remove existing highlight if present
+	local existingHighlight = characterModel:FindFirstChildOfClass("Highlight")
+	if existingHighlight then
+		existingHighlight:Destroy()
+	end
+
+	-- Apply appropriate Highlight
+	local highlightTemplate
+	if isFriend then
+		highlightTemplate = GUI.PlayerHighlights.FriendHighlight
+	else
+		highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
+	end
+
+	local newHighlight = highlightTemplate:Clone()
+	newHighlight.Adornee = characterModel
+	newHighlight.Enabled = gameFrame.MetaFrame.On.Value
+	newHighlight.Parent = characterModel
+
+	print("Applied " .. (isFriend and "Friend" or "Stranger") .. " Highlight to " .. characterModel.Name)
+end
+_G.ApplyTestHighlight = ApplyTestHighlight
+
 function ToggleTool(v)
 	if equippedTool["Reloading"] ~= "None" or equippedTool["Recovering"] or anims["Drive"].IsPlaying then
 		return

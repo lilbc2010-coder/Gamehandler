@@ -1353,6 +1353,25 @@ function PickUpPropForEditing(placedProp)
 		local countLabel = propFrame.CountLabel
 		countLabel.Count.Value = countLabel.Count.Value + 1
 		countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	elseif dragProp["Mode"] and dragProp["Prop"] then
+		-- We're dragging a new prop (not editing), clean it up without placing
+		-- Remove from ignore list
+		for i, v in pairs(ignoreList) do
+			if v == dragProp["Prop"] then
+				table.remove(ignoreList, i)
+				break
+			end
+		end
+		-- Remove highlight
+		if dragProp["Highlight"] then
+			dragProp["Highlight"]:Destroy()
+			dragProp["Highlight"] = nil
+		end
+		-- Destroy the dragged prop
+		dragProp["Prop"]:Destroy()
+		dragProp["Mode"] = nil
+		dragProp["RefMode"] = nil
+		dragProp["Prop"] = nil
 	end
 
 	-- IMPORTANT: Capture the placed prop's actual world CFrame BEFORE deleting it

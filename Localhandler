@@ -285,7 +285,7 @@ end
 
 function InteractiveAction()
 	local interacted = false
-	if mouseTarget.Name == "Click" and not mouseCooldown and not mouseTarget.Parent.Debounce.Value then
+	if mouseTarget.Name == "Click" and not mouseCooldown and not mouseTarget.Parent.Debounce.Value and not propFrame.Visible then
 		interacted, mouseCooldown = true, true
 		local tp = mouseTarget.Parent:FindFirstChild("Type")
 		if not humanStates["resting"] and tp then
@@ -2755,8 +2755,10 @@ function SaveFile(v)
 			if string.find(slotName, "PreviousCharacter") then
 				slotName, isSaved = "Load_LastCharacter", false
 			end
-			-- Restore and clear occluded models before loading to free prop slots
+			-- Restore occluded models and clear existing props before loading
 			RestoreAllOccludedModels()
+			rep.PropsCleared_Client:FireServer()
+			ResetPropCount()
 			local loadedData = rep.SaveLoadPropsChar:InvokeServer("Load", string.sub(slotName, 6, string.len(slotName)), isSaved)
 			--if props, loadedData = prop count, if character, loadedData = character data
 			GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
@@ -3607,6 +3609,24 @@ function InitializeButton(v)
 					plrState = "Customizing"
 					-- Hide Prop Placer when entering Customize Menu
 					propFrame.Visible = false
+					-- Clean up any dragging/editing prop
+					if dragProp["Mode"] and dragProp["Prop"] then
+						for i, v in pairs(ignoreList) do
+							if v == dragProp["Prop"] then
+								table.remove(ignoreList, i)
+								break
+							end
+						end
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+						dragProp["Mode"] = nil
+						dragProp["RefMode"] = nil
+						dragProp["Prop"] = nil
+						editingPropData = nil
+					end
 					if gameFrame.OOCFrame.On.Value then
 						gameFrame.OOCFrame.On.Value = false
 						rep.OOCModeUpdate:InvokeServer(false)
@@ -3985,18 +4005,17 @@ function InitializeButton(v)
 					end
 				elseif v.Parent.Name == "SaveClearButton" then
 					if v.Text == "Clear All Props" then
+						-- Set up for Clear All Props confirmation
+						GUI.ClearPropsFrame.Label.Text = "Are you sure you want to clear all props?"
+						GUI.ClearPropsFrame.Confirm.Button.Text = "Clear"
+						GUI.ClearPropsFrame.Mode.Value = "Clear"
 						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
 					elseif v.Text == "Restore Occluded Models" then
-						-- Only restore occluded models, don't clear placed props
-						local restoredCount = RestoreAllOccludedModels()
-						if restoredCount > 0 then
-							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
-						else
-							notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
-						end
-						notifier.Visible = true
-						notifierCount = notifierCount + 1
-						CoroutineLauncher("NotifierDelay")
+						-- Set up for Restore Occluded Models confirmation
+						GUI.ClearPropsFrame.Label.Text = "Are you sure you want to restore all occluded models?"
+						GUI.ClearPropsFrame.Confirm.Button.Text = "Restore"
+						GUI.ClearPropsFrame.Mode.Value = "Restore"
+						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
 					else
 						GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 						GUI.SaveLoadPropsFrame:TweenPosition(UDim2.new(0.35, 0, 0.3, 0), "Out", "Sine", 0.2)
@@ -4015,11 +4034,24 @@ function InitializeButton(v)
 					SaveFile(v)
 				elseif v:IsDescendantOf(GUI.ClearPropsFrame) then
 					if v.Parent.Name == "Confirm" then
-						-- Restore all occluded models before clearing
-						RestoreAllOccludedModels()
-						rep.PropsCleared_Client:FireServer()
-						script.GUISounds.DeleteSound:Play()
-						ResetPropCount()
+						if GUI.ClearPropsFrame.Mode.Value == "Clear" then
+							-- Clear All Props - restore occluded models first, then clear props
+							RestoreAllOccludedModels()
+							rep.PropsCleared_Client:FireServer()
+							script.GUISounds.DeleteSound:Play()
+							ResetPropCount()
+						elseif GUI.ClearPropsFrame.Mode.Value == "Restore" then
+							-- Restore Occluded Models only
+							local restoredCount = RestoreAllOccludedModels()
+							if restoredCount > 0 then
+								notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
+							else
+								notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
+							end
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+						end
 					end
 					GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 				elseif v.Parent.Name == "MetaFrame" then
@@ -5003,6 +5035,12 @@ rep.RadioUpdate.OnClientEvent:Connect(function(state, itemName, startTime)
 			v:Stop()
 		end
 		sound:Play()
+		-- Set volume based on radio toggle state
+		if gameFrame.RadioFrame.On.Value then
+			sound.Volume = 0.5
+		else
+			sound.Volume = 0
+		end
 	end
 end)
 

@@ -47,7 +47,15 @@ local bodyColorSlider = {Dragging = false, Offset = 0}
 local rainSplashActive, bulletTrailActive, cloudsActive, precipitationActive = false, false, false, false
 local frameRate, frames = 30, 1
 local fCooldown = false
+local editingPropData = nil
+local propPlacementTimes = {}
+local buildingBlocked = false
+local continuousPlacing = true
+local occluderMode = false
+local occludedModels = {}
+local occluderHighlight = nil
 local mat = Enum.Material
+local occluderHighlights = {}
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
 local customizationRoom
@@ -423,21 +431,170 @@ function SitAction(tp, seatPart)
 	rep.CharacterSound:FireServer(p, floorMaterialSounds[currentFloorMaterial], 0, false)
 end
 
+function FindOccluderModel(startInstance)
+	-- Traverse up the hierarchy to find a model or part with an Occluder StringValue
+	local current = startInstance
+	while current and current ~= work do
+		local occluderValue = current:FindFirstChild("Occluder")
+		if occluderValue and occluderValue:IsA("StringValue") and occluderValue.Value == "Occluded" then
+			return current
+		end
+		current = current.Parent
+	end
+	return nil
+end
+
 function ClickAction()
 	local interacted = false
+
+	-- Handle Occluder Mode clicks
+	if occluderMode and propFrame.Visible and mouseTarget and mouseTarget.Parent then
+		local currentMode = propFrame.ModeButton.Button.Mode.Value
+
+		if currentMode == "Build" then
+			-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+			local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+			if model then
+				-- Store original properties before modifying
+				local partData = {}
+
+				-- Check if the occluder target is a BasePart itself
+				if model:IsA("BasePart") then
+					partData[model] = {
+						Transparency = model.Transparency,
+						CanCollide = model.CanCollide,
+						Color = model.Color,
+						Material = model.Material,
+						Reflectance = model.Reflectance
+					}
+					-- Make transparent and remove collisions
+					model.Transparency = 1
+					model.CanCollide = false
+				else
+					-- It's a model, process all descendants
+					for _, part in ipairs(model:GetDescendants()) do
+						if part:IsA("BasePart") then
+							partData[part] = {
+								Transparency = part.Transparency,
+								CanCollide = part.CanCollide,
+								Color = part.Color,
+								Material = part.Material,
+								Reflectance = part.Reflectance
+							}
+							-- Make transparent and remove collisions
+							part.Transparency = 1
+							part.CanCollide = false
+						end
+					end
+				end
+
+				-- Add to occluded models list with stored properties
+				table.insert(occludedModels, {Model = model, PartData = partData})
+
+				-- Take up 1 prop slot
+				local countLabel = propFrame.CountLabel
+				countLabel.Count.Value = countLabel.Count.Value + 1
+				countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+				if countLabel.Count.Value == rep.PropLimit.Value then
+					countLabel.TextColor3 = Color3.new(1, 0, 0)
+					propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
+				end
+
+				-- Remove the highlight
+				if occluderHighlight then
+					occluderHighlight:Destroy()
+					occluderHighlight = nil
+				end
+
+				-- Notify player
+				notifier.Text = "OCCLUDED"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+
+				return
+			end
+		elseif currentMode == "Delete" then
+			-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+			local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+			if model then
+				-- Check if the model is in the occludedModels list
+				for i, occludedData in ipairs(occludedModels) do
+					if occludedData.Model == model then
+						-- Restore the model using stored properties
+						for part, properties in pairs(occludedData.PartData) do
+							if part and part.Parent then
+								part.Transparency = properties.Transparency
+								part.CanCollide = properties.CanCollide
+								part.Color = properties.Color
+								part.Material = properties.Material
+								part.Reflectance = properties.Reflectance
+							end
+						end
+
+						-- Remove from occluded models list
+						table.remove(occludedModels, i)
+
+						-- Free up 1 prop slot
+						local countLabel = propFrame.CountLabel
+						countLabel.Count.Value = countLabel.Count.Value - 1
+						countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+						countLabel.TextColor3 = Color3.new(0, 0, 0)
+						propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
+
+						-- Remove the highlight
+						if occluderHighlight then
+							occluderHighlight:Destroy()
+							occluderHighlight = nil
+						end
+
+						-- Notify player
+						notifier.Text = "RESTORED"
+						notifier.Visible = true
+						notifierCount = notifierCount + 1
+						CoroutineLauncher("NotifierDelay")
+
+						return
+					end
+				end
+			end
+		end
+	end
+
 	if mouseState == "Hovering" or (mouseTarget and mouseTarget.Name == "Click") then
 		interacted = InteractiveAction()
 	elseif mouseState == "OwnedProp" or (mouseTarget and (platform == "Mobile" and mouseTarget.Name == "OwnedProp")) then
-		if mouseTarget.Parent.Owner.Value == plr.Name and propFrame.Visible then 
+		if mouseTarget.Parent.Owner.Value == plr.Name and propFrame.Visible then
 			if propFrame.ModeButton.Button.Mode.Value == "Delete" and mouseTarget.Anchored then
-				mouseTarget.Parent.Owner.Value = ""
-				rep.PropDelete:FireServer(mouseTarget.Parent)
-				script.GUISounds.DeleteSound:Play()
-				local countLabel = propFrame.CountLabel
-				countLabel.Count.Value = countLabel.Count.Value - 1
-				countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
-				countLabel.TextColor3 = Color3.new(0, 0, 0)
-				countLabel.Parent.Label.TextColor3 = Color3.new(0, 0, 0)
+				-- When Occluder Mode is on, don't allow deleting placed props
+				if occluderMode then
+					-- Do nothing - props are protected in Occluder Mode
+					return
+				end
+
+				-- Check if this model/part is in the occludedModels list
+				local isOccludedModel = false
+				local occludedModel = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+				if occludedModel then
+					for _, occludedData in ipairs(occludedModels) do
+						if occludedData.Model == occludedModel then
+							isOccludedModel = true
+							break
+						end
+					end
+				end
+
+				-- Only allow deletion if it's not an occluded model
+				if not isOccludedModel then
+					mouseTarget.Parent.Owner.Value = ""
+					rep.PropDelete:FireServer(mouseTarget.Parent)
+					script.GUISounds.DeleteSound:Play()
+					local countLabel = propFrame.CountLabel
+					countLabel.Count.Value = countLabel.Count.Value - 1
+					countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+					countLabel.TextColor3 = Color3.new(0, 0, 0)
+					countLabel.Parent.Label.TextColor3 = Color3.new(0, 0, 0)
+				end
 			elseif dragProp["Mode"] == "Orient" and mouseTarget.Anchored then
 				local primary = mouseTarget.Parent.PrimaryPart
 				local propData
@@ -504,6 +661,161 @@ function ClickAction()
 			CoroutineLauncher("NotifierDelay")
 		end
 	end
+
+	-- Handle prop placement when Prop Placer UI is visible (even without tool equipped)
+	if not interacted and propFrame.Visible and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
+		local previousMode = dragProp["Mode"]
+		local propCFrame = dragProp["Prop"].Prop.PrimaryPart.CFrame
+
+		-- Check if trying to place below Y = 0
+		if propCFrame.Position.Y < 0 then
+			if not buildingBlocked then
+				buildingBlocked = true
+				notifier.Text = "CAN'T BUILD"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+				wait(3)
+				buildingBlocked = false
+			end
+			return
+		end
+
+		-- Check if trying to place inside another player
+		local propParts = dragProp["Prop"]:GetDescendants()
+		local touchingPlayers = false
+		for _, part in ipairs(propParts) do
+			if part:IsA("BasePart") then
+				local touching = part:GetTouchingParts()
+				for _, touchedPart in ipairs(touching) do
+					if touchedPart.Parent and touchedPart.Parent:FindFirstChild("Humanoid") then
+						local touchedPlayer = game.Players:GetPlayerFromCharacter(touchedPart.Parent)
+						if touchedPlayer and touchedPlayer ~= plr then
+							touchingPlayers = true
+							break
+						end
+					end
+				end
+				if touchingPlayers then break end
+			end
+		end
+		if touchingPlayers then
+			if not buildingBlocked then
+				buildingBlocked = true
+				notifier.Text = "CAN'T BUILD"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+				wait(3)
+				buildingBlocked = false
+			end
+			return
+		end
+
+		-- Check rate limiting (2 props per second)
+		local currentTime = tick()
+		local newTimes = {}
+		for _, placeTime in ipairs(propPlacementTimes) do
+			if currentTime - placeTime < 1 then
+				table.insert(newTimes, placeTime)
+			end
+		end
+		propPlacementTimes = newTimes
+
+		if #propPlacementTimes >= 2 then
+			if not buildingBlocked then
+				buildingBlocked = true
+				notifier.Text = "SLOW DOWN"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+				wait(1)
+				buildingBlocked = false
+			end
+			return
+		end
+
+		table.insert(propPlacementTimes, currentTime)
+
+		-- Place the prop
+		local refMode = dragProp["RefMode"]
+		local propName = dragProp["Prop"].Name
+		dragProp["Mode"] = false
+		propFrame.TuningFrame.Visible = false
+		local approvedProp = rep.PlaceProp:InvokeServer(propName, propCFrame, mouseTarget)
+
+		if approvedProp then
+			-- Track placed prop data
+			placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = refMode,
+				rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"],
+				tY = dragProp["tY"], tZ = dragProp["tZ"], sRX = propSlider["rX"], sRY = propSlider["rY"],
+				sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"],
+				sTZ = propSlider["tZ"]}
+			script.GUISounds.BuildSound:Play()
+
+			-- Clear editing prop data
+			editingPropData = nil
+
+			-- Update count
+			local countLabel = propFrame.CountLabel
+			countLabel.Count.Value = countLabel.Count.Value + 1
+			countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+			if countLabel.Count.Value == rep.PropLimit.Value then
+				countLabel.TextColor3 = Color3.new(1, 0, 0)
+				propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
+			end
+
+			-- Handle continuous placing or cleanup
+			if continuousPlacing then
+				-- Remove from ignore list
+				for i, v in pairs(ignoreList) do
+					if v == dragProp["Prop"] then
+						table.remove(ignoreList, i)
+						break
+					end
+				end
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
+				end
+				dragProp["Prop"]:Destroy()
+
+				-- Reset transformations
+				for _,c in pairs({"RotFrame", "TranslateFrame"}) do
+					for _,v in pairs({"X", "Y", "Z"}) do
+						local slider = propFrame.TuningFrame:FindFirstChild(c..v).Slider
+						slider.Position = UDim2.new(0.45, 0, -.25, 0)
+						propSlider[string.lower(string.sub(c, 1, 1))..v] = 0
+					end
+				end
+
+				-- Create new prop instance
+				dragProp = {Mode = "Drag", RefMode = refMode, Prop = rep.Props:FindFirstChild(propName):Clone(),
+					Location = CFrame.new(), rX = 0, rY = 0, rZ = 0, tX = 0, tY = 0, tZ = 0}
+				local container = Instance.new("Model")
+				container.Name = dragProp["Prop"].Name
+				dragProp["Prop"].Name = "Prop"
+				dragProp["Prop"].Parent = container
+				dragProp["Prop"] = container
+				local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+				falsePrimary.Parent = container
+				container.PrimaryPart = falsePrimary
+				ignoreList[#ignoreList + 1] = dragProp["Prop"]
+				ScanProp(dragProp["Prop"])
+				dragProp["Prop"].Parent = work
+			else
+				-- Non-continuous: Deselect the prop
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
+				end
+				dragProp["Prop"]:Destroy()
+				dragProp["Prop"] = nil
+			end
+		end
+		return
+	end
+
 	local toolButton = toolboxFrame:FindFirstChild(equippedTool["Slot"])
 	if not interacted and equippedTool["Toggle"] == "Equipped" and equippedTool["Aiming"] and not 
 		(humanStates["run"] or humanStates["climb"] or humanStates["fall"] or humanStates["swim"]
@@ -764,22 +1076,104 @@ function ClickAction()
 				elseif not utilityAnim and not isContinuous then
 					toolButton.SelectedItem.Value = false
 				end
-				if equippedTool["Variant"] == "Prop Placer" and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
+				if propFrame.Visible and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
 					local previousMode = dragProp["Mode"]
+					local propCFrame = dragProp["Prop"].Prop.PrimaryPart.CFrame
+
+					-- Check if trying to place below Y = 0
+					if propCFrame.Position.Y < 0 then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
+					-- Check if trying to place inside another player
+					local propParts = dragProp["Prop"]:GetDescendants()
+					local touchingPlayers = false
+					for _, part in ipairs(propParts) do
+						if part:IsA("BasePart") then
+							local touching = part:GetTouchingParts()
+							for _, touchedPart in ipairs(touching) do
+								if touchedPart.Parent and touchedPart.Parent:FindFirstChild("Humanoid") then
+									-- Found a player character
+									local touchedPlayer = game.Players:GetPlayerFromCharacter(touchedPart.Parent)
+									if touchedPlayer and touchedPlayer ~= plr then
+										touchingPlayers = true
+										break
+									end
+								end
+							end
+							if touchingPlayers then break end
+						end
+					end
+					if touchingPlayers then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
+					-- Check rate limiting (2 props per second)
+					local currentTime = tick()
+					-- Remove placements older than 1 second
+					local newTimes = {}
+					for _, placeTime in ipairs(propPlacementTimes) do
+						if currentTime - placeTime < 1 then
+							table.insert(newTimes, placeTime)
+						end
+					end
+					propPlacementTimes = newTimes
+
+					-- Check if placing too fast
+					if #propPlacementTimes >= 2 then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "BUILDING TOO FAST"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
+						return
+					end
+
+					-- If blocked, don't allow placement
+					if buildingBlocked then
+						return
+					end
+
 					dragProp["Mode"] = false
 					propFrame.TuningFrame.Visible = false
-					local approvedProp = rep.PlaceProp:InvokeServer(dragProp["Prop"].Name, 
-						dragProp["Prop"].Prop.PrimaryPart.CFrame, mouseTarget)
+					local approvedProp = rep.PlaceProp:InvokeServer(dragProp["Prop"].Name, propCFrame, mouseTarget)
 					if approvedProp then
-						placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = dragProp["RefMode"], 
-							rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"], 
+						-- Track placement time
+						table.insert(propPlacementTimes, currentTime)
+
+						placedPropData[#placedPropData + 1] = {Prop = approvedProp, RefMode = dragProp["RefMode"],
+							rX = dragProp["rX"], rY = dragProp["rY"], rZ = dragProp["rZ"], tX = dragProp["tX"],
 							tY = dragProp["tY"], tZ = dragProp["tZ"], sRX = propSlider["rX"], sRY = propSlider["rY"],
-							sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"], 
+							sRZ = propSlider["rZ"], sTX = propSlider["tX"], sTY = propSlider["tY"],
 							sTZ = propSlider["tZ"]}
 						script.GUISounds.BuildSound:Play()
-						dragProp["Prop"]:Destroy()
-						dragProp["Prop"] = nil
-						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+
+						-- Clear editing prop data since we successfully placed it
+						editingPropData = nil
+
+						-- Update count
 						local countLabel = propFrame.CountLabel
 						countLabel.Count.Value = countLabel.Count.Value + 1
 						countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
@@ -787,6 +1181,22 @@ function ClickAction()
 							countLabel.TextColor3 = Color3.new(1, 0, 0)
 							propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
 						end
+
+					-- Check if continuous placing is enabled
+					if continuousPlacing then
+						-- CONTINUOUS PLACING: Keep the same prop selected
+						-- Destroy the old drag prop and create a new one of the same type
+						local propName = dragProp["Prop"].Name
+						local refMode = dragProp["RefMode"]
+
+						-- Remove old highlight
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+
+						-- Reset transformations
 						for _,c in pairs({"RotFrame", "TranslateFrame"}) do
 							for _,v in pairs({"X", "Y", "Z"}) do
 								local slider = propFrame.TuningFrame:FindFirstChild(c..v).Slider
@@ -794,6 +1204,33 @@ function ClickAction()
 								propSlider[string.lower(string.sub(c, 1, 1))..v] = 0
 							end
 						end
+
+						-- Create new prop instance of the same type
+						dragProp = {Mode = "Drag", RefMode = refMode, Prop = rep.Props:FindFirstChild(propName):Clone(),
+							Location = CFrame.new(), rX = 0, rY = 0, rZ = 0, tX = 0, tY = 0, tZ = 0}
+						local container = Instance.new("Model")
+						container.Name = dragProp["Prop"].Name
+						dragProp["Prop"].Name = "Prop"
+						dragProp["Prop"].Parent = container
+						dragProp["Prop"] = container
+						local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+						falsePrimary.Parent = container
+						container.PrimaryPart = falsePrimary
+						ignoreList[#ignoreList + 1] = dragProp["Prop"]
+						ScanProp(dragProp["Prop"])
+						dragProp["Prop"].Parent = work
+
+						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+					else
+						-- Non-continuous: Deselect the prop
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+						dragProp["Prop"] = nil
+						propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+					end
 					else
 						dragProp["Mode"] = previousMode
 					end
@@ -1030,6 +1467,178 @@ function ChangePropMode(input)
 	end
 end
 
+function PickUpPropForEditing(placedProp)
+	-- Find the prop data in our tracking table
+	local propData
+	local propDataIndex
+	for i, v in pairs(placedPropData) do
+		if v["Prop"] == placedProp then
+			propData = v
+			propDataIndex = i
+			break
+		end
+	end
+
+	-- If prop not in tracking table (e.g., loaded from save), create default data
+	if not propData then
+		propData = {
+			Prop = placedProp,
+			RefMode = "Global",
+			rX = 0, rY = 0, rZ = 0,
+			tX = 0, tY = 0, tZ = 0,
+			sRX = 0, sRY = 0, sRZ = 0,
+			sTX = 0, sTY = 0, sTZ = 0
+		}
+		propDataIndex = nil  -- Won't remove from table since it wasn't in there
+	end
+
+	-- If we're already editing a prop, restore it first
+	if editingPropData and dragProp["Mode"] then
+		-- Remove highlight from current editing prop
+		if dragProp["Highlight"] then
+			dragProp["Highlight"]:Destroy()
+			dragProp["Highlight"] = nil
+		end
+		-- Restore the previously edited prop to its original position
+		rep.PropPlace:InvokeServer(work, editingPropData.OriginalCFrame, editingPropData.RefMode,
+			editingPropData.rX, editingPropData.rY, editingPropData.rZ,
+			editingPropData.tX, editingPropData.tY, editingPropData.tZ,
+			editingPropData.sRX, editingPropData.sRY, editingPropData.sRZ,
+			editingPropData.sTX, editingPropData.sTY, editingPropData.sTZ,
+			editingPropData.PropName)
+		-- Destroy the dragged prop
+		dragProp["Prop"]:Destroy()
+		dragProp["Mode"] = nil
+		dragProp["Prop"] = nil
+		-- Update count
+		local countLabel = propFrame.CountLabel
+		countLabel.Count.Value = countLabel.Count.Value + 1
+		countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	elseif dragProp["Mode"] and dragProp["Prop"] then
+		-- We're dragging a new prop (not editing), clean it up without placing
+		-- Remove from ignore list
+		for i, v in pairs(ignoreList) do
+			if v == dragProp["Prop"] then
+				table.remove(ignoreList, i)
+				break
+			end
+		end
+		-- Remove highlight
+		if dragProp["Highlight"] then
+			dragProp["Highlight"]:Destroy()
+			dragProp["Highlight"] = nil
+		end
+		-- Destroy the dragged prop
+		dragProp["Prop"]:Destroy()
+		dragProp["Mode"] = nil
+		dragProp["RefMode"] = nil
+		dragProp["Prop"] = nil
+	end
+
+	-- IMPORTANT: Capture the placed prop's actual world CFrame BEFORE deleting it
+	local placedPropCFrame = placedProp.PrimaryPart.CFrame
+
+	-- Store the editing prop data so we can restore it later if needed
+	editingPropData = {
+		OriginalCFrame = placedPropCFrame,
+		RefMode = propData["RefMode"],
+		rX = propData["rX"],
+		rY = propData["rY"],
+		rZ = propData["rZ"],
+		tX = propData["tX"],
+		tY = propData["tY"],
+		tZ = propData["tZ"],
+		sRX = propData["sRX"],
+		sRY = propData["sRY"],
+		sRZ = propData["sRZ"],
+		sTX = propData["sTX"],
+		sTY = propData["sTY"],
+		sTZ = propData["sTZ"],
+		PropName = placedProp.Name
+	}
+
+	-- Delete the placed prop from the server (but keep it in placedPropData to avoid duplication)
+	placedProp.Owner.Value = ""
+	rep.PropDelete:FireServer(placedProp)
+	script.GUISounds.DeleteSound:Play()
+
+	-- Update the prop count
+	local countLabel = propFrame.CountLabel
+	countLabel.Count.Value = countLabel.Count.Value - 1
+	countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	countLabel.TextColor3 = Color3.new(0, 0, 0)
+	propFrame.Label.TextColor3 = Color3.new(0, 0, 0)
+
+	-- Remove from placed prop data tracking (to prevent duplication)
+	-- Only remove if it was in the tracking table
+	if propDataIndex then
+		table.remove(placedPropData, propDataIndex)
+	end
+
+	-- Get the prop template from ReplicatedStorage
+	local propTemplate = rep.Props:FindFirstChild(placedProp.Name)
+	if not propTemplate then return end
+
+	-- Create a new draggable version - reset transformations to 0
+	-- Start in Drag mode so player can move it with cursor
+	dragProp = {
+		Mode = "Drag",
+		RefMode = propData["RefMode"],
+		Prop = propTemplate:Clone(),
+		Location = CFrame.new(),
+		rX = 0,
+		rY = 0,
+		rZ = 0,
+		tX = 0,
+		tY = 0,
+		tZ = 0
+	}
+
+	-- Set up the prop container (same as when initially selecting a prop)
+	local container = Instance.new("Model")
+	container.Name = dragProp["Prop"].Name
+	dragProp["Prop"].Name = "Prop"
+	dragProp["Prop"].Parent = container
+	dragProp["Prop"] = container
+	local falsePrimary = dragProp["Prop"].Prop.PrimaryPart:Clone()
+	falsePrimary.Parent = container
+	container.PrimaryPart = falsePrimary
+	ignoreList[#ignoreList + 1] = dragProp["Prop"]
+	ScanProp(dragProp["Prop"])
+	dragProp["Prop"].Parent = work
+
+	-- Reset sliders to center position (0 transformations) when editing
+	for _, v in pairs({"Rot", "Translate"}) do
+		for _, n in pairs({"X", "Y", "Z"}) do
+			local slider = propFrame.TuningFrame:FindFirstChild(v.."Frame"..n).Slider
+			slider.Position = UDim2.new(0.45, 0, -.25, 0)
+			propSlider[string.lower(string.sub(v, 1, 1))..n] = 0
+		end
+	end
+
+	-- Set Location to the actual placed position (no need to calculate base)
+	-- Prop can be freely edited from this position
+	dragProp["Location"] = placedPropCFrame
+
+	-- Position the container (and inner prop) at the placed location with orientation preserved
+	-- Use container's PrimaryPart (falsePrimary) so the inner Prop model moves with it
+	dragProp["Prop"]:SetPrimaryPartCFrame(placedPropCFrame)
+
+	-- Create blue outline highlight for the selected prop (local to this player only)
+	local highlight = Instance.new("Highlight")
+	highlight.Adornee = dragProp["Prop"]
+	highlight.FillColor = Color3.fromRGB(71, 129, 255)
+	highlight.FillTransparency = 0.9
+	highlight.OutlineColor = Color3.fromRGB(91, 152, 208)
+	highlight.OutlineTransparency = 0.3
+	highlight.Parent = cam  -- Parent to camera to ensure it's local only
+	dragProp["Highlight"] = highlight
+
+	-- Don't show tuning frame initially - player is in Drag mode
+	propFrame.TuningFrame.Visible = false
+	propFrame.MobilePropFrame.MovementButton.Button.Text = "Drag Mode"
+end
+
 function UserInput()
 	UIS.MouseIconEnabled = false
 	if UIS.TouchEnabled then
@@ -1112,10 +1721,169 @@ function UserInput()
 			elseif input.KeyCode == Enum.KeyCode.C then
 				CrouchAction()
 			elseif input.KeyCode == Enum.KeyCode.R then
-				ReloadAction()
-				ChangePropMode("Tuning")
+				-- Check if player is hovering over an owned prop with Prop Placer equipped in Build Mode
+				-- Can only edit one prop at a time (editingPropData must be nil)
+				-- Don't edit the dragProp if in continuous placing mode
+				-- Don't allow editing when Occluder Mode is on
+				if propFrame.Visible and propFrame.ModeButton.Button.Mode.Value == "Build" and
+					not editingPropData and mouseState == "OwnedProp" and mouseTarget and
+					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored and
+					(not dragProp["Prop"] or dragProp["Prop"] ~= mouseTarget.Parent) and not occluderMode then
+					-- Pick up the prop for editing
+					PickUpPropForEditing(mouseTarget.Parent)
+				else
+					-- Normal reload or tuning mode toggle
+					ReloadAction()
+					ChangePropMode("Tuning")
+				end
 			elseif input.KeyCode == Enum.KeyCode.Q then
 				RelaxAction()
+			elseif input.KeyCode == Enum.KeyCode.B then
+				-- Toggle continuous prop placing (disabled when Occluder Mode is on)
+				if propFrame.Visible and not occluderMode then
+					continuousPlacing = not continuousPlacing
+					if continuousPlacing then
+						notifier.Text = "CONTINUOUS PLACING: ON"
+					else
+						notifier.Text = "CONTINUOUS PLACING: OFF"
+					end
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+				end
+			elseif input.KeyCode == Enum.KeyCode.O then
+				-- Toggle Occluder Mode
+				if propFrame.Visible then
+					occluderMode = not occluderMode
+					local currentMode = propFrame.ModeButton.Button.Mode.Value
+					if occluderMode then
+						notifier.Text = "OCCLUDER MODE: ON"
+						-- Clean up any selected/dragging prop
+						if dragProp["Mode"] and dragProp["Prop"] then
+							-- Remove from ignore list
+							for i, v in pairs(ignoreList) do
+								if v == dragProp["Prop"] then
+									table.remove(ignoreList, i)
+									break
+								end
+							end
+							-- Remove highlight
+							if dragProp["Highlight"] then
+								dragProp["Highlight"]:Destroy()
+								dragProp["Highlight"] = nil
+							end
+							-- Destroy the prop
+							dragProp["Prop"]:Destroy()
+							dragProp["Mode"] = nil
+							dragProp["RefMode"] = nil
+							dragProp["Prop"] = nil
+							-- Clear editing data
+							editingPropData = nil
+						end
+						-- If in SaveLoad mode, switch to Build mode
+						if currentMode == "SaveLoad" then
+							propFrame.ModeButton.Button.Mode.Value = "Build"
+							propFrame.ModeButton.Button.Text = "Delete Models"
+							propFrame.LoadBuildFrame.Visible = false
+							-- Ensure occluded models are hidden in Build Mode
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = 1
+									end
+								end
+							end
+						elseif currentMode == "Build" then
+							-- Rename Build Mode to Delete Models
+							propFrame.ModeButton.Button.Text = "Delete Models"
+						elseif currentMode == "Delete" then
+							-- Rename Delete Mode to Restore Models
+							propFrame.ModeButton.Button.Text = "Restore Models"
+						end
+						-- Change Clear All Props to Restore Occluded Models
+						propFrame.SaveClearButton.Button.Text = "Restore Occluded Models"
+						-- Hide prop list when Occluder Mode is on
+						propFrame.ScrollFrame.Visible = false
+						-- Show occluded models if in Delete Mode
+						if currentMode == "Delete" then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = properties.Transparency
+										part.Color = properties.Color
+										part.Material = properties.Material
+										part.Reflectance = properties.Reflectance
+									end
+								end
+							end
+						end
+					else
+						notifier.Text = "OCCLUDER MODE: OFF"
+						-- Change Restore Occluded Models back to Clear All Props
+						propFrame.SaveClearButton.Button.Text = "Clear All Props"
+						-- Revert mode button names back to normal
+						if currentMode == "Build" then
+							propFrame.ModeButton.Button.Text = "Build Mode"
+						elseif currentMode == "Delete" then
+							propFrame.ModeButton.Button.Text = "Delete Mode"
+						end
+						-- Show prop list when Occluder Mode is off (except in Save/Load mode)
+						if currentMode ~= "SaveLoad" then
+							propFrame.ScrollFrame.Visible = true
+						end
+						-- Hide occluded models if in Delete Mode
+						if currentMode == "Delete" then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = 1
+									end
+								end
+							end
+						end
+						-- Remove any existing highlight when turning off
+						if occluderHighlight then
+							occluderHighlight:Destroy()
+							occluderHighlight = nil
+						end
+					end
+					notifier.Visible = true
+					notifierCount = notifierCount + 1
+					CoroutineLauncher("NotifierDelay")
+				end
+			elseif input.KeyCode == Enum.KeyCode.N then
+				-- Toggle Prop Placer UI on/off (works regardless of equipped tool)
+				-- Don't allow during inappropriate states
+				if plrState == "Dead" or plrState == "Customizing" or plrState == "Title" then
+					return
+				end
+				propFrame.Visible = not propFrame.Visible
+				if propFrame.Visible then
+					notifier.Text = "PROP PLACER: ON"
+				else
+					notifier.Text = "PROP PLACER: OFF"
+					-- Clean up any selected/dragging prop when hiding UI
+					if dragProp["Mode"] and dragProp["Prop"] then
+						for i, v in pairs(ignoreList) do
+							if v == dragProp["Prop"] then
+								table.remove(ignoreList, i)
+								break
+							end
+						end
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+						dragProp["Mode"] = nil
+						dragProp["RefMode"] = nil
+						dragProp["Prop"] = nil
+						editingPropData = nil
+					end
+				end
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
 			elseif input.KeyCode == Enum.KeyCode.Z and keyFunctions["zFunction"] then
 				ToolEffect(keyFunctions["zFunction"]["Effect"], "zFunction")
 			elseif input.KeyCode == Enum.KeyCode.Y and keyFunctions["yFunction"] then
@@ -1962,7 +2730,16 @@ function SaveFile(v)
 			if string.find(slotName, "Char") then
 				newName = GUI.SaveLoadCharacterFrame.NameBox.Text
 			end
-			local approved = rep.SaveLoadPropsChar:InvokeServer("Save", slotName, newName)
+			-- Collect occluded model paths for prop saves
+			local occludedPaths = {}
+			if string.find(slotName, "Build") then
+				for _, occludedData in ipairs(occludedModels) do
+					if occludedData.Model and occludedData.Model.Parent then
+						table.insert(occludedPaths, occludedData.Model:GetFullName())
+					end
+				end
+			end
+			local approved = rep.SaveLoadPropsChar:InvokeServer("Save", slotName, newName, occludedPaths)
 			if approved then
 				GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 				if string.find(slotName, "Char") then
@@ -1987,14 +2764,67 @@ function SaveFile(v)
 			if string.find(slotName, "PreviousCharacter") then
 				slotName, isSaved = "Load_LastCharacter", false
 			end
+			-- Restore and clear occluded models before loading to free prop slots
+			RestoreAllOccludedModels()
 			local loadedData = rep.SaveLoadPropsChar:InvokeServer("Load", string.sub(slotName, 6, string.len(slotName)), isSaved)
 			--if props, loadedData = prop count, if character, loadedData = character data
 			GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 			if loadedData then
 				notifier.Text = "LOADED"
-				if typeof(loadedData) == "number" then
+				if typeof(loadedData) == "table" and loadedData.PropCount then
+					-- Prop save loaded - update count
+					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData.PropCount
+					propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+					-- Re-occlude models from saved paths
+					if loadedData.OccludedModels and #loadedData.OccludedModels > 0 then
+						for _, modelPath in ipairs(loadedData.OccludedModels) do
+							-- Parse path and find the model
+							local pathParts = string.split(modelPath, ".")
+							local current = game
+							for _, part in ipairs(pathParts) do
+								if current then
+									current = current:FindFirstChild(part)
+								end
+							end
+							-- If model found, occlude it
+							if current and (current:IsA("Model") or current:IsA("BasePart")) then
+								local partData = {}
+								if current:IsA("BasePart") then
+									partData[current] = {
+										Transparency = current.Transparency,
+										CanCollide = current.CanCollide,
+										Color = current.Color,
+										Material = current.Material,
+										Reflectance = current.Reflectance
+									}
+									current.Transparency = 1
+									current.CanCollide = false
+								else
+									for _, part in ipairs(current:GetDescendants()) do
+										if part:IsA("BasePart") then
+											partData[part] = {
+												Transparency = part.Transparency,
+												CanCollide = part.CanCollide,
+												Color = part.Color,
+												Material = part.Material,
+												Reflectance = part.Reflectance
+											}
+											part.Transparency = 1
+											part.CanCollide = false
+										end
+									end
+								end
+								table.insert(occludedModels, {Model = current, PartData = partData})
+								-- Increment prop count for occluded model
+								propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + 1
+								propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+							end
+						end
+					end
+				elseif typeof(loadedData) == "number" then
+					-- Legacy format support
 					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData
-					propFrame.CountLabel.Text = tostring(loadedData) .."/".. tostring(rep.PropLimit.Value)
+					propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
 				else
 					LoadData(loadedData)
 				end
@@ -2010,6 +2840,30 @@ function SaveFile(v)
 		end
 		GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 	end
+end
+
+function RestoreAllOccludedModels()
+	-- Restore all occluded models to their original state
+	local restoredCount = #occludedModels
+	for _, occludedData in ipairs(occludedModels) do
+		for part, properties in pairs(occludedData.PartData) do
+			if part and part.Parent then
+				part.Transparency = properties.Transparency
+				part.CanCollide = properties.CanCollide
+				part.Color = properties.Color
+				part.Material = properties.Material
+				part.Reflectance = properties.Reflectance
+			end
+		end
+	end
+	occludedModels = {}
+	-- Decrement prop count for restored occluded models
+	if restoredCount > 0 then
+		local countLabel = propFrame.CountLabel
+		countLabel.Count.Value = math.max(0, countLabel.Count.Value - restoredCount)
+		countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	end
+	return restoredCount
 end
 
 function ChangeBodyColor()
@@ -2760,6 +3614,8 @@ function InitializeButton(v)
 			if plrState ~= "Customizing" then
 				if v.Parent.Name == "CustomizeFrame" then
 					plrState = "Customizing"
+					-- Hide Prop Placer when entering Customize Menu
+					propFrame.Visible = false
 					if gameFrame.OOCFrame.On.Value then
 						gameFrame.OOCFrame.On.Value = false
 						rep.OOCModeUpdate:InvokeServer(false)
@@ -2942,6 +3798,15 @@ function InitializeButton(v)
 					if v.Parent.Name == "DeleteVehicleButton" then
 						item1, item2 = "Delete", nil
 					end
+
+					-- Check if trying to spawn vehicle below Y = 0
+					if item1 ~= "Delete" and char.HumanoidRootPart.Position.Y < 0 then
+						notifierCount = notifierCount + 1
+						notifier.Text = "UNAVAILABLE"
+						notifier.Visible = true
+						CoroutineLauncher("NotifierDelay")
+						return
+					end
 					notifier.Text = "LOADING"
 					notifier.Visible = true
 					local approved = rep.VehicleUpdate:InvokeServer(item1, item2, os.time())
@@ -2966,10 +3831,28 @@ function InitializeButton(v)
 						v.BackgroundColor3 = Color3.fromRGB(56, 92, 255)
 						v.Parent.BackgroundColor3 = Color3.fromRGB(33, 55, 153)
 					end
-				elseif v.Parent.Name == "PropButton" and propFrame.CountLabel.Count.Value ~= rep.PropLimit.Value and 
+				elseif v.Parent.Name == "PropButton" and propFrame.CountLabel.Count.Value ~= rep.PropLimit.Value and
 					propFrame.ModeButton.Button.Mode.Value == "Build" then
 					if dragProp["Mode"] then
+						-- If we're editing a prop, restore it before selecting a new one
+						if editingPropData then
+							rep.PropPlace:InvokeServer(work, editingPropData.OriginalCFrame, editingPropData.RefMode,
+								editingPropData.rX, editingPropData.rY, editingPropData.rZ,
+								editingPropData.tX, editingPropData.tY, editingPropData.tZ,
+								editingPropData.sRX, editingPropData.sRY, editingPropData.sRZ,
+								editingPropData.sTX, editingPropData.sTY, editingPropData.sTZ,
+								editingPropData.PropName)
+							local countLabel = propFrame.CountLabel
+							countLabel.Count.Value = countLabel.Count.Value + 1
+							countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+							editingPropData = nil
+						end
 						dragProp["Mode"] = false
+						-- Remove highlight before destroying prop
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
 						dragProp["Prop"]:Destroy()
 						dragProp["Prop"] = nil
 					end
@@ -3000,24 +3883,81 @@ function InitializeButton(v)
 				elseif v.Parent.Name == "ModeButton" then
 					if v.Mode.Value == "Build" then
 						v.Mode.Value = "Delete"
-						v.Text = "Delete Mode"
+						-- Use renamed mode text if Occluder Mode is on
+						if occluderMode then
+							v.Text = "Restore Models"
+						else
+							v.Text = "Delete Mode"
+						end
 						if dragProp["Mode"] then
+							-- If we're editing a prop, just destroy it without restoring
+							-- (switching to Delete Mode acts like canceling the edit)
 							dragProp["Mode"] = false
+							-- Remove highlight before destroying prop
+							if dragProp["Highlight"] then
+								dragProp["Highlight"]:Destroy()
+								dragProp["Highlight"] = nil
+							end
 							dragProp["Prop"]:Destroy()
 							dragProp["Prop"] = nil
+							-- Clear editing data without restoring
+							editingPropData = nil
+						end
+						-- Show occluded models in Delete Mode ONLY if Occluder Mode is on
+						if occluderMode then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = properties.Transparency
+										part.Color = properties.Color
+										part.Material = properties.Material
+										part.Reflectance = properties.Reflectance
+									end
+								end
+							end
 						end
 					elseif v.Mode.Value == "Delete" then
-						v.Mode.Value = "SaveLoad"
-						v.Text = "Save/Load Mode"
-						propFrame.ScrollFrame.Visible = false
-						propFrame.LoadBuildFrame.Visible = true
-						propFrame.SaveClearButton.Button.Text = "Save Build"
-					else
+						-- Skip SaveLoad mode if Occluder Mode is on
+						if occluderMode then
+							v.Mode.Value = "Build"
+							v.Text = "Delete Models"
+							-- Prop list stays hidden in Occluder Mode
+							propFrame.LoadBuildFrame.Visible = false
+							propFrame.SaveClearButton.Button.Text = "Restore Occluded Models"
+						else
+							v.Mode.Value = "SaveLoad"
+							v.Text = "Save/Load Mode"
+							propFrame.ScrollFrame.Visible = false
+							propFrame.LoadBuildFrame.Visible = true
+							propFrame.SaveClearButton.Button.Text = "Save Build"
+						end
+						-- Hide occluded models when leaving Delete Mode (only if they were visible)
+						if occluderMode then
+							for _, occludedData in ipairs(occludedModels) do
+								for part, properties in pairs(occludedData.PartData) do
+									if part and part.Parent then
+										part.Transparency = 1
+									end
+								end
+							end
+						end
+					elseif v.Mode.Value == "SaveLoad" then
 						v.Mode.Value = "Build"
 						v.Text = "Build Mode"
-						propFrame.ScrollFrame.Visible = true
+						-- Only show prop list if Occluder Mode is off
+						if not occluderMode then
+							propFrame.ScrollFrame.Visible = true
+						end
 						propFrame.LoadBuildFrame.Visible = false
 						propFrame.SaveClearButton.Button.Text = "Clear All Props"
+						-- Ensure occluded models are hidden in Build Mode
+						for _, occludedData in ipairs(occludedModels) do
+							for part, properties in pairs(occludedData.PartData) do
+								if part and part.Parent then
+									part.Transparency = 1
+								end
+							end
+						end
 					end
 				elseif v:IsDescendantOf(propFrame) and string.find(v.Parent.Name, "Build") then
 					GUI.ConfirmSaveLoadFrame.Label.Text = "Are you sure you want to load '"..v.Text.."'?"
@@ -3055,6 +3995,17 @@ function InitializeButton(v)
 				elseif v.Parent.Name == "SaveClearButton" then
 					if v.Text == "Clear All Props" then
 						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
+					elseif v.Text == "Restore Occluded Models" then
+						-- Only restore occluded models, don't clear placed props
+						local restoredCount = RestoreAllOccludedModels()
+						if restoredCount > 0 then
+							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
+						else
+							notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
+						end
+						notifier.Visible = true
+						notifierCount = notifierCount + 1
+						CoroutineLauncher("NotifierDelay")
 					else
 						GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 						GUI.SaveLoadPropsFrame:TweenPosition(UDim2.new(0.35, 0, 0.3, 0), "Out", "Sine", 0.2)
@@ -3073,6 +4024,8 @@ function InitializeButton(v)
 					SaveFile(v)
 				elseif v:IsDescendantOf(GUI.ClearPropsFrame) then
 					if v.Parent.Name == "Confirm" then
+						-- Restore all occluded models before clearing
+						RestoreAllOccludedModels()
 						rep.PropsCleared_Client:FireServer()
 						script.GUISounds.DeleteSound:Play()
 						ResetPropCount()
@@ -4934,6 +5887,8 @@ end)
 
 human.Died:Connect(function()
 	plrState = "Dead"
+	-- Hide Prop Placer on death
+	propFrame.Visible = false
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	PhyService:SetPartCollisionGroup(char.Head, "CharacterParts")
@@ -5248,7 +6203,7 @@ function ResetTool()
 		end
 	end
 	keyFunctions = {}
-	if lastTool then 
+	if lastTool then
 		if lastTool.Button.Text == "Prop Placer" then
 			propFrame.Visible = false
 			for i,v in pairs(ignoreList) do
@@ -5258,10 +6213,35 @@ function ResetTool()
 				end
 			end
 			if dragProp["Mode"] then
+				-- Remove highlight before destroying prop
+				if dragProp["Highlight"] then
+					dragProp["Highlight"]:Destroy()
+					dragProp["Highlight"] = nil
+				end
 				dragProp["Prop"]:Destroy()
 				dragProp["Mode"] = nil
 				dragProp["RefMode"] = nil
 				dragProp["Prop"] = nil
+			end
+			-- Hide occluded models when unequipping prop placer (like switching to Build Mode)
+			if occluderMode then
+				for _, occludedData in ipairs(occludedModels) do
+					for part, properties in pairs(occludedData.PartData) do
+						if part and part.Parent then
+							part.Transparency = 1
+						end
+					end
+				end
+				-- Remove any existing occluder highlight
+				if occluderHighlight then
+					occluderHighlight:Destroy()
+					occluderHighlight = nil
+				end
+				-- Remove all multiple highlights
+				for _, highlight in ipairs(occluderHighlights) do
+					highlight:Destroy()
+				end
+				occluderHighlights = {}
 			end
 		elseif lastTool.Button.Text == "Vehicle Placer" then
 			vehicleFrame.Visible = false
@@ -5927,6 +6907,42 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 		if mouseTarget then
 			local isHumanoid = CheckIfPartIsHumanoid(mouseTarget)
+
+			-- Check if in Occluder Mode and hovering over an occludable model/part
+			local isOccludableModel = false
+			if occluderMode and propFrame.Visible and mouseTarget.Parent then
+				local currentMode = propFrame.ModeButton.Button.Mode.Value
+
+				if currentMode == "Build" then
+					-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+					local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+					if model then
+						-- Check if NOT already occluded
+						local isAlreadyOccluded = false
+						for _, occludedData in ipairs(occludedModels) do
+							if occludedData.Model == model then
+								isAlreadyOccluded = true
+								break
+							end
+						end
+						if not isAlreadyOccluded then
+							isOccludableModel = true
+						end
+					end
+				elseif currentMode == "Delete" then
+					-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+					local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+					if model then
+						for _, occludedData in ipairs(occludedModels) do
+							if occludedData.Model == model then
+								isOccludableModel = true
+								break
+							end
+						end
+					end
+				end
+			end
+
 			if mouseTarget.Name == "Click" then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = ""
@@ -5936,8 +6952,8 @@ stepconnection = RunService.RenderStepped:Connect(function()
 			elseif isHumanoid then
 				mouseState = "Hovering"
 				mouseIcon.NameTag.Text = isHumanoid.Name
-			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or 
-				mouseTarget.Name == "Click" or isHumanoid) then
+			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or
+				mouseTarget.Name == "Click" or isHumanoid or isOccludableModel) then
 				mouseState = "None"
 				mouseIcon.NameTag.Text = ""
 			end
@@ -5949,6 +6965,106 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 	end
+
+	-- Occluder Mode highlight handling
+	if occluderMode and propFrame.Visible then
+		local currentMode = propFrame.ModeButton.Button.Mode.Value
+		local shouldHighlight = false
+		local highlightModel = nil
+		local highlightType = nil
+
+		if currentMode == "Build" and mouseTarget and mouseTarget.Parent then
+			-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+			local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+			if model then
+				shouldHighlight = true
+				highlightType = "Delete"
+				highlightModel = model
+			end
+		elseif currentMode == "Delete" and mouseTarget and mouseTarget.Parent then
+			-- Find the model or part with Occluder value (check mouseTarget first, then traverse up)
+			local model = FindOccluderModel(mouseTarget) or FindOccluderModel(mouseTarget.Parent)
+			if model then
+				-- Check if the model is in the occludedModels list
+				for _, occludedData in ipairs(occludedModels) do
+					if occludedData.Model == model then
+						shouldHighlight = true
+						highlightType = "Restore"
+						highlightModel = model
+						break
+					end
+				end
+			end
+		end
+
+		if shouldHighlight then
+			if not occluderHighlight or occluderHighlight.Adornee ~= highlightModel then
+				-- Remove old highlight if it exists
+				if occluderHighlight then
+					occluderHighlight:Destroy()
+				end
+				-- Clone highlight from StarterGUI.Highlights
+				local highlightTemplate = plr.PlayerGui:FindFirstChild("Highlights")
+				if highlightTemplate then
+					local templateHighlight = highlightTemplate:FindFirstChild(highlightType .. "Highlight")
+					if templateHighlight then
+						occluderHighlight = templateHighlight:Clone()
+						occluderHighlight.Adornee = highlightModel
+						occluderHighlight.Parent = cam
+					end
+				end
+			end
+		elseif occluderHighlight then
+			-- Remove highlight if no longer hovering over valid target
+			occluderHighlight:Destroy()
+			occluderHighlight = nil
+		end
+	elseif occluderHighlight then
+		-- Remove highlight if occluder mode is off
+		occluderHighlight:Destroy()
+		occluderHighlight = nil
+	end
+
+	-- Multiple highlights for ALL occluded models in Delete Mode
+	if occluderMode and propFrame.Visible then
+		local currentMode = propFrame.ModeButton.Button.Mode.Value
+		if currentMode == "Delete" then
+			-- Remove old highlights
+			for _, highlight in ipairs(occluderHighlights) do
+				highlight:Destroy()
+			end
+			occluderHighlights = {}
+
+			-- Create highlights for all occluded models using template
+			local highlightTemplate = plr.PlayerGui:FindFirstChild("Highlights")
+			if highlightTemplate then
+				local templateHighlight = highlightTemplate:FindFirstChild("RestoreHighlight")
+				if templateHighlight then
+					for _, occludedData in ipairs(occludedModels) do
+						local highlight = templateHighlight:Clone()
+						highlight.Adornee = occludedData.Model
+						highlight.Parent = cam
+						table.insert(occluderHighlights, highlight)
+					end
+				end
+			end
+		else
+			-- Not in Delete Mode, remove all multiple highlights
+			if #occluderHighlights > 0 then
+				for _, highlight in ipairs(occluderHighlights) do
+					highlight:Destroy()
+				end
+				occluderHighlights = {}
+			end
+		end
+	elseif #occluderHighlights > 0 then
+		-- Occluder mode is off, remove all multiple highlights
+		for _, highlight in ipairs(occluderHighlights) do
+			highlight:Destroy()
+		end
+		occluderHighlights = {}
+	end
+
 	if dragProp["Mode"] and mouseTarget then
 		if dragProp["Mode"] == "Drag" then
 			local cf = CFrame.new(mouseHit)

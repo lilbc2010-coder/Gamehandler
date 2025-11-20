@@ -56,6 +56,7 @@ local occludedModels = {}
 local occluderHighlight = nil
 local mat = Enum.Material
 local occluderHighlights = {}
+local propScrollPosition = 0
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
 local customizationRoom
@@ -1798,6 +1799,7 @@ function UserInput()
 						propFrame.ScrollFrame.Visible = false
 						propFrame.SearchBox.Visible = false
 						propFrame.SearchBox.Text = ""
+						propScrollPosition = 0
 						-- Show occluded models if in Delete Mode
 						if currentMode == "Delete" then
 							for _, occludedData in ipairs(occludedModels) do
@@ -4850,6 +4852,20 @@ function FilterPropList(searchText)
 				button.Visible = false
 			end
 		end
+	end
+
+	-- Scroll to top when searching, restore position when cleared
+	if searchText ~= "" then
+		-- Save current scroll position if not already saved
+		if propScrollPosition == 0 or propFrame.ScrollFrame.CanvasPosition.Y == 0 then
+			propScrollPosition = propFrame.ScrollFrame.CanvasPosition.Y
+		end
+		-- Scroll to top
+		propFrame.ScrollFrame.CanvasPosition = Vector2.new(0, 0)
+	else
+		-- Restore original scroll position when search is cleared
+		propFrame.ScrollFrame.CanvasPosition = Vector2.new(0, propScrollPosition)
+		propScrollPosition = 0
 	end
 end
 

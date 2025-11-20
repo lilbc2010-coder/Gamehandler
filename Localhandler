@@ -1742,14 +1742,6 @@ function UserInput()
 				-- Toggle continuous prop placing (disabled when Occluder Mode is on)
 				if propFrame.Visible and not occluderMode then
 					continuousPlacing = not continuousPlacing
-					if continuousPlacing then
-						notifier.Text = "CONTINUOUS PLACING: ON"
-					else
-						notifier.Text = "CONTINUOUS PLACING: OFF"
-					end
-					notifier.Visible = true
-					notifierCount = notifierCount + 1
-					CoroutineLauncher("NotifierDelay")
 				end
 			elseif input.KeyCode == Enum.KeyCode.O then
 				-- Toggle Occluder Mode
@@ -1802,8 +1794,10 @@ function UserInput()
 						end
 						-- Change Clear All Props to Restore Occluded Models
 						propFrame.SaveClearButton.Button.Text = "Restore Occluded Models"
-						-- Hide prop list when Occluder Mode is on
+						-- Hide prop list and search box when Occluder Mode is on
 						propFrame.ScrollFrame.Visible = false
+						propFrame.SearchBox.Visible = false
+						propFrame.SearchBox.Text = ""
 						-- Show occluded models if in Delete Mode
 						if currentMode == "Delete" then
 							for _, occludedData in ipairs(occludedModels) do
@@ -1827,9 +1821,10 @@ function UserInput()
 						elseif currentMode == "Delete" then
 							propFrame.ModeButton.Button.Text = "Delete Mode"
 						end
-						-- Show prop list when Occluder Mode is off (except in Save/Load mode)
+						-- Show prop list and search box when Occluder Mode is off (except in Save/Load mode)
 						if currentMode ~= "SaveLoad" then
 							propFrame.ScrollFrame.Visible = true
+							propFrame.SearchBox.Visible = true
 						end
 						-- Hide occluded models if in Delete Mode
 						if currentMode == "Delete" then
@@ -4040,12 +4035,13 @@ function InitializeButton(v)
 						local restoredCount = RestoreAllOccludedModels()
 						if restoredCount > 0 then
 							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
 						else
-							notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
+							-- Play error sound when no models to restore
+							script.GUISounds.DeleteSound:Play()
 						end
-						notifier.Visible = true
-						notifierCount = notifierCount + 1
-						CoroutineLauncher("NotifierDelay")
 					end
 					GUI.ClearOccludedFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 				elseif v.Parent.Name == "MetaFrame" then
@@ -4840,6 +4836,27 @@ function OrganizePropFrame(ownedProps)
 		propFrame.Label.TextColor3 = Color3.new(1, 0, 0)
 	end
 end
+
+function FilterPropList(searchText)
+	-- Filter prop list based on search text
+	local searchLower = string.lower(searchText)
+	for _, button in pairs(propFrame.ScrollFrame:GetChildren()) do
+		if button.Name == "PropButton" then
+			local propName = string.lower(button.Button.ItemName.Text)
+			-- Show if search is empty or prop name contains search text
+			if searchText == "" or string.find(propName, searchLower, 1, true) then
+				button.Visible = true
+			else
+				button.Visible = false
+			end
+		end
+	end
+end
+
+-- Connect SearchBox to filter props as user types
+propFrame.SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	FilterPropList(propFrame.SearchBox.Text)
+end)
 
 function ToggleToolDisplay(button)
 	if equippedTool["Variant"] ~= button.Text and equippedTool["Toggle"] ~= "Unequipping" and equippedTool["Toggle"] ~= "Equipping" then

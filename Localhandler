@@ -1847,21 +1847,15 @@ function UserInput()
 							occluderHighlight = nil
 						end
 					end
-					notifier.Visible = true
-					notifierCount = notifierCount + 1
-					CoroutineLauncher("NotifierDelay")
 				end
 			elseif input.KeyCode == Enum.KeyCode.N then
 				-- Toggle Prop Placer UI on/off (works regardless of equipped tool)
-				-- Don't allow during inappropriate states
-				if plrState == "Dead" or plrState == "Customizing" or plrState == "Title" then
+				-- Don't allow during inappropriate states or during title/loading screen
+				if plrState == "Dead" or plrState == "Customizing" or plrState == "Title" or GUI.FirstEntry.Value then
 					return
 				end
 				propFrame.Visible = not propFrame.Visible
-				if propFrame.Visible then
-					notifier.Text = "PROP PLACER: ON"
-				else
-					notifier.Text = "PROP PLACER: OFF"
+				if not propFrame.Visible then
 					-- Clean up any selected/dragging prop when hiding UI
 					if dragProp["Mode"] and dragProp["Prop"] then
 						for i, v in pairs(ignoreList) do
@@ -1881,9 +1875,6 @@ function UserInput()
 						editingPropData = nil
 					end
 				end
-				notifier.Visible = true
-				notifierCount = notifierCount + 1
-				CoroutineLauncher("NotifierDelay")
 			elseif input.KeyCode == Enum.KeyCode.Z and keyFunctions["zFunction"] then
 				ToolEffect(keyFunctions["zFunction"]["Effect"], "zFunction")
 			elseif input.KeyCode == Enum.KeyCode.Y and keyFunctions["yFunction"] then
@@ -4981,6 +4972,10 @@ rep.ReceiptProcessed.OnClientEvent:Connect(function(amount)
 end)
 
 rep.RadioUpdate.OnClientEvent:Connect(function(state, itemName, startTime)
+	-- Don't play radio during title/loading screen
+	if GUI.FirstEntry.Value then
+		return
+	end
 	local sound = script.Radio:FindFirstChild(itemName)
 	if state == "Announcement" then
 		if sound then
@@ -5064,6 +5059,10 @@ function ToggleHeadwear()
 end
 
 function ToggleRadio()
+	-- Don't toggle radio during title/loading screen
+	if GUI.FirstEntry.Value then
+		return
+	end
 	local button = gameFrame.RadioFrame
 	local activated = button.On
 	if activated.Value then
@@ -5889,6 +5888,24 @@ human.Died:Connect(function()
 	plrState = "Dead"
 	-- Hide Prop Placer on death
 	propFrame.Visible = false
+	-- Clean up any dragging/editing prop
+	if dragProp["Mode"] and dragProp["Prop"] then
+		for i, v in pairs(ignoreList) do
+			if v == dragProp["Prop"] then
+				table.remove(ignoreList, i)
+				break
+			end
+		end
+		if dragProp["Highlight"] then
+			dragProp["Highlight"]:Destroy()
+			dragProp["Highlight"] = nil
+		end
+		dragProp["Prop"]:Destroy()
+		dragProp["Mode"] = nil
+		dragProp["RefMode"] = nil
+		dragProp["Prop"] = nil
+		editingPropData = nil
+	end
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	PhyService:SetPartCollisionGroup(char.Head, "CharacterParts")
@@ -6126,6 +6143,25 @@ function HumanoidEvent(event, input1)
 		end
 	elseif event == "Swimming" and not humanStates["swim"] then
 		if humanStates["animated"] then
+		-- Hide Prop Placer and clean up any dragging/editing prop
+		propFrame.Visible = false
+		if dragProp["Mode"] and dragProp["Prop"] then
+			for i, v in pairs(ignoreList) do
+				if v == dragProp["Prop"] then
+					table.remove(ignoreList, i)
+					break
+				end
+			end
+			if dragProp["Highlight"] then
+				dragProp["Highlight"]:Destroy()
+				dragProp["Highlight"] = nil
+			end
+			dragProp["Prop"]:Destroy()
+			dragProp["Mode"] = nil
+			dragProp["RefMode"] = nil
+			dragProp["Prop"] = nil
+			editingPropData = nil
+		end
 			StopAnimatedState()
 		end
 		local oldIdle, oldMove, oldState

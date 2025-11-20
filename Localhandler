@@ -325,7 +325,10 @@ function InteractiveAction()
 			print("[Friend Teleport Debug] Conditions met! Showing teleport frame")
 			if not tpFrame.Ready.Value then
 				tpFrame.Ready.Value = true
-				tpFrame.FriendTravel.Value = foreignPlr.Name
+				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+				if friendTravelValue then
+					friendTravelValue.Value = foreignPlr.Name
+				end
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
 				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
@@ -2553,16 +2556,20 @@ function TpFrameButtons()
 				tsFrame.Visible = true
 				tsFrame.TransitionPhase.Value = "In"
 				-- Check if this is a friend teleport
-				if tpFrame.FriendTravel.Value ~= "" then
-					rep.Teleport:InvokeServer("Transitioning_Friend", tpFrame.FriendTravel.Value)
-					print("[Friend Teleport] Initiating teleport to " .. tpFrame.FriendTravel.Value)
-					tpFrame.FriendTravel.Value = "" -- Clear the value after use
+				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+				if friendTravelValue and friendTravelValue.Value ~= "" then
+					rep.Teleport:InvokeServer("Transitioning_Friend", friendTravelValue.Value)
+					print("[Friend Teleport] Initiating teleport to " .. friendTravelValue.Value)
+					friendTravelValue.Value = "" -- Clear the value after use
 				else
 					rep.Teleport:InvokeServer("Transitioning_Map")
 				end
 			else
 				rep.Teleport:InvokeServer("Cancel")
-				tpFrame.FriendTravel.Value = "" -- Clear friend travel on cancel
+				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+				if friendTravelValue then
+					friendTravelValue.Value = "" -- Clear friend travel on cancel
+				end
 			end
 			tpFrame.Ready.Value = false
 			tpFrame:TweenPosition(UDim2.new(0.7, 0, 1.7, 0), "Out", "Sine", 0)
@@ -2581,6 +2588,15 @@ function TpFrameButtons()
 			cn.Moving.Value = false
 		end)
 	end
+end
+
+-- Initialize FriendTravel StringValue if it doesn't exist
+if not tpFrame:FindFirstChild("FriendTravel") then
+	local friendTravel = Instance.new("StringValue")
+	friendTravel.Name = "FriendTravel"
+	friendTravel.Value = ""
+	friendTravel.Parent = tpFrame
+	print("[Friend Teleport] Created FriendTravel StringValue in TeleportFrame")
 end
 
 TpFrameButtons()

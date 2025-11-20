@@ -1697,36 +1697,34 @@ function UserInput()
 					CoroutineLauncher("NotifierDelay")
 				end
 			elseif input.KeyCode == Enum.KeyCode.N then
-				-- Toggle Prop Placer UI on/off
-				if equippedTool["Variant"] == "Prop Placer" then
-					propFrame.Visible = not propFrame.Visible
-					if propFrame.Visible then
-						notifier.Text = "PROP PLACER: ON"
-					else
-						notifier.Text = "PROP PLACER: OFF"
-						-- Clean up any selected/dragging prop when hiding UI
-						if dragProp["Mode"] and dragProp["Prop"] then
-							for i, v in pairs(ignoreList) do
-								if v == dragProp["Prop"] then
-									table.remove(ignoreList, i)
-									break
-								end
+				-- Toggle Prop Placer UI on/off (works regardless of equipped tool)
+				propFrame.Visible = not propFrame.Visible
+				if propFrame.Visible then
+					notifier.Text = "PROP PLACER: ON"
+				else
+					notifier.Text = "PROP PLACER: OFF"
+					-- Clean up any selected/dragging prop when hiding UI
+					if dragProp["Mode"] and dragProp["Prop"] then
+						for i, v in pairs(ignoreList) do
+							if v == dragProp["Prop"] then
+								table.remove(ignoreList, i)
+								break
 							end
-							if dragProp["Highlight"] then
-								dragProp["Highlight"]:Destroy()
-								dragProp["Highlight"] = nil
-							end
-							dragProp["Prop"]:Destroy()
-							dragProp["Mode"] = nil
-							dragProp["RefMode"] = nil
-							dragProp["Prop"] = nil
-							editingPropData = nil
 						end
+						if dragProp["Highlight"] then
+							dragProp["Highlight"]:Destroy()
+							dragProp["Highlight"] = nil
+						end
+						dragProp["Prop"]:Destroy()
+						dragProp["Mode"] = nil
+						dragProp["RefMode"] = nil
+						dragProp["Prop"] = nil
+						editingPropData = nil
 					end
-					notifier.Visible = true
-					notifierCount = notifierCount + 1
-					CoroutineLauncher("NotifierDelay")
 				end
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
 			elseif input.KeyCode == Enum.KeyCode.Z and keyFunctions["zFunction"] then
 				ToolEffect(keyFunctions["zFunction"]["Effect"], "zFunction")
 			elseif input.KeyCode == Enum.KeyCode.Y and keyFunctions["yFunction"] then

@@ -1606,7 +1606,7 @@ function UserInput()
 						-- If in SaveLoad mode, switch to Build mode
 						if currentMode == "SaveLoad" then
 							propFrame.ModeButton.Button.Mode.Value = "Build"
-							propFrame.ModeButton.Button.Text = "Build Mode"
+							propFrame.ModeButton.Button.Text = "Delete Models"
 							propFrame.LoadBuildFrame.Visible = false
 							-- Ensure occluded models are hidden in Build Mode
 							for _, occludedData in ipairs(occludedModels) do
@@ -1616,9 +1616,15 @@ function UserInput()
 									end
 								end
 							end
+						elseif currentMode == "Build" then
+							-- Rename Build Mode to Delete Models
+							propFrame.ModeButton.Button.Text = "Delete Models"
+						elseif currentMode == "Delete" then
+							-- Rename Delete Mode to Restore Models
+							propFrame.ModeButton.Button.Text = "Restore Models"
 						end
-						-- Change Clear All Props to Restore Occlusions
-						propFrame.SaveClearButton.Button.Text = "Restore Occlusions"
+						-- Change Clear All Props to Restore Occluded Models
+						propFrame.SaveClearButton.Button.Text = "Restore Occluded Models"
 						-- Hide prop list when Occluder Mode is on
 						propFrame.ScrollFrame.Visible = false
 						-- Show occluded models if in Delete Mode
@@ -1636,8 +1642,14 @@ function UserInput()
 						end
 					else
 						notifier.Text = "OCCLUDER MODE: OFF"
-						-- Change Restore Occlusions back to Clear All Props
+						-- Change Restore Occluded Models back to Clear All Props
 						propFrame.SaveClearButton.Button.Text = "Clear All Props"
+						-- Revert mode button names back to normal
+						if currentMode == "Build" then
+							propFrame.ModeButton.Button.Text = "Build Mode"
+						elseif currentMode == "Delete" then
+							propFrame.ModeButton.Button.Text = "Delete Mode"
+						end
 						-- Show prop list when Occluder Mode is off (except in Save/Load mode)
 						if currentMode ~= "SaveLoad" then
 							propFrame.ScrollFrame.Visible = true
@@ -3659,7 +3671,12 @@ function InitializeButton(v)
 				elseif v.Parent.Name == "ModeButton" then
 					if v.Mode.Value == "Build" then
 						v.Mode.Value = "Delete"
-						v.Text = "Delete Mode"
+						-- Use renamed mode text if Occluder Mode is on
+						if occluderMode then
+							v.Text = "Restore Models"
+						else
+							v.Text = "Delete Mode"
+						end
 						if dragProp["Mode"] then
 							-- If we're editing a prop, just destroy it without restoring
 							-- (switching to Delete Mode acts like canceling the edit)
@@ -3691,10 +3708,10 @@ function InitializeButton(v)
 						-- Skip SaveLoad mode if Occluder Mode is on
 						if occluderMode then
 							v.Mode.Value = "Build"
-							v.Text = "Build Mode"
+							v.Text = "Delete Models"
 							-- Prop list stays hidden in Occluder Mode
 							propFrame.LoadBuildFrame.Visible = false
-							propFrame.SaveClearButton.Button.Text = "Clear All Props"
+							propFrame.SaveClearButton.Button.Text = "Restore Occluded Models"
 						else
 							v.Mode.Value = "SaveLoad"
 							v.Text = "Save/Load Mode"
@@ -3766,13 +3783,13 @@ function InitializeButton(v)
 				elseif v.Parent.Name == "SaveClearButton" then
 					if v.Text == "Clear All Props" then
 						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
-					elseif v.Text == "Restore Occlusions" then
+					elseif v.Text == "Restore Occluded Models" then
 						-- Only restore occluded models, don't clear placed props
 						local restoredCount = RestoreAllOccludedModels()
 						if restoredCount > 0 then
-							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUSION" .. (restoredCount > 1 and "S" or "")
+							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
 						else
-							notifier.Text = "NO OCCLUSIONS TO RESTORE"
+							notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
 						end
 						notifier.Visible = true
 						notifierCount = notifierCount + 1

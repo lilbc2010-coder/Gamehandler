@@ -2523,6 +2523,8 @@ function SaveFile(v)
 			if string.find(slotName, "PreviousCharacter") then
 				slotName, isSaved = "Load_LastCharacter", false
 			end
+			-- Restore and clear occluded models before loading to free prop slots
+			RestoreAllOccludedModels()
 			local loadedData = rep.SaveLoadPropsChar:InvokeServer("Load", string.sub(slotName, 6, string.len(slotName)), isSaved)
 			--if props, loadedData = prop count, if character, loadedData = character data
 			GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
@@ -2530,11 +2532,7 @@ function SaveFile(v)
 				notifier.Text = "LOADED"
 				if typeof(loadedData) == "number" then
 					propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + loadedData
-					-- Restore all occluded models before clearing (in case any still exist)
-					RestoreAllOccludedModels()
-					-- Note: Auto-occluding loaded props would require server-side support
-					-- Models with Occluder="Occluded" can be manually occluded after load
-					propFrame.CountLabel.Text = tostring(loadedData) .."/".. tostring(rep.PropLimit.Value)
+					propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
 				else
 					LoadData(loadedData)
 				end
@@ -2554,6 +2552,7 @@ end
 
 function RestoreAllOccludedModels()
 	-- Restore all occluded models to their original state
+	local restoredCount = #occludedModels
 	for _, occludedData in ipairs(occludedModels) do
 		for part, properties in pairs(occludedData.PartData) do
 			if part and part.Parent then
@@ -2566,6 +2565,13 @@ function RestoreAllOccludedModels()
 		end
 	end
 	occludedModels = {}
+	-- Decrement prop count for restored occluded models
+	if restoredCount > 0 then
+		local countLabel = propFrame.CountLabel
+		countLabel.Count.Value = math.max(0, countLabel.Count.Value - restoredCount)
+		countLabel.Text = tostring(countLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
+	end
+	return restoredCount
 end
 
 function ChangeBodyColor()

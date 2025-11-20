@@ -3136,17 +3136,18 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 		end
 	elseif mode == "Load" then
 		if string.find(input1, "Build") then
-			if #gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"] + #gameData[plr.Name]["Server"]["PropsPlaced"] <=
-				gameData[plr.Name]["Server"]["PropLimit"] and 
-				typeof(gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"][1]) == "table" then
+			local savedProps = gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]
+			if #savedProps + #gameData[plr.Name]["Server"]["PropsPlaced"] <=
+				gameData[plr.Name]["Server"]["PropLimit"] and
+				(#savedProps == 0 or typeof(savedProps[1]) == "table") then
 					local creationTime = os.time()
-				for _,v in pairs(gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]) do
+				for _,v in pairs(savedProps) do
 					local prop = rep.Props:FindFirstChild(v[1])
 					if prop then
 						PlaceProp(plr.Name, prop, CFrame.new(unpack(v[2])), creationTime, v[3])
 					end
 				end
-				return #gameData[plr.Name]["Account"]["PropSaves"][input1]["Props"]
+				return #savedProps
 			end
 		else
 			local loadout, dataBase

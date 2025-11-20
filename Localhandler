@@ -2894,8 +2894,9 @@ function SetupGameButtons()
 		customizeFrame.RotateRight.Button, mobileFrame.zFunctionButton.Button, mobileFrame.tFunctionButton.Button,
 		settingFrame.Exit.Button, settingFrame.RainSplashButton.Button, settingFrame.BulletTrailButton.Button, 
 		gameFrame.SettingsFrame.Button, currencyFrame.Extreme.Button, propFrame.TuningFrame.ResetRotationButton.Button, 
-		propFrame.TuningFrame.ResetTranslationButton.Button, GUI.ClearPropsFrame.Confirm.Button, 
-		GUI.ClearPropsFrame.Deny.Button, customizeFrame.NameClear.Button, customizeFrame.BioClear.Button,
+		propFrame.TuningFrame.ResetTranslationButton.Button, GUI.ClearPropsFrame.Confirm.Button,
+		GUI.ClearPropsFrame.Deny.Button, GUI.ClearOccludedFrame.Confirm.Button,
+		GUI.ClearOccludedFrame.Deny.Button, customizeFrame.NameClear.Button, customizeFrame.BioClear.Button,
 		txtFrame.ToggleTextScale.Button, txtFrame.ToggleTextStroke.Button, txtFrame.ConfirmTextBox.Button,
 		txtFrame.ConfirmRGB.Button, txtFrame.ConfirmTextSize.Button, txtFrame.ClearTextBox.Button, txtFrame.Exit.Button,
 		txtFrame.TextXAlignLeft.Button, txtFrame.TextXAlignCenter.Button, txtFrame.TextXAlignRight.Button, 
@@ -4005,17 +4006,9 @@ function InitializeButton(v)
 					end
 				elseif v.Parent.Name == "SaveClearButton" then
 					if v.Text == "Clear All Props" then
-						-- Set up for Clear All Props confirmation
-						GUI.ClearPropsFrame.Label.Text = "Are you sure you want to clear all props?"
-						GUI.ClearPropsFrame.Confirm.Button.Text = "Clear"
-						GUI.ClearPropsFrame.Mode.Value = "Clear"
 						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
 					elseif v.Text == "Restore Occluded Models" then
-						-- Set up for Restore Occluded Models confirmation
-						GUI.ClearPropsFrame.Label.Text = "Are you sure you want to restore all occluded models?"
-						GUI.ClearPropsFrame.Confirm.Button.Text = "Restore"
-						GUI.ClearPropsFrame.Mode.Value = "Restore"
-						GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
+						GUI.ClearOccludedFrame:TweenPosition(UDim2.new(0.4, 0, 0.4, 0), "In", "Sine", 0.2)
 					else
 						GUI.ConfirmSaveLoadFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 						GUI.SaveLoadPropsFrame:TweenPosition(UDim2.new(0.35, 0, 0.3, 0), "Out", "Sine", 0.2)
@@ -4034,26 +4027,27 @@ function InitializeButton(v)
 					SaveFile(v)
 				elseif v:IsDescendantOf(GUI.ClearPropsFrame) then
 					if v.Parent.Name == "Confirm" then
-						if GUI.ClearPropsFrame.Mode.Value == "Clear" then
-							-- Clear All Props - restore occluded models first, then clear props
-							RestoreAllOccludedModels()
-							rep.PropsCleared_Client:FireServer()
-							script.GUISounds.DeleteSound:Play()
-							ResetPropCount()
-						elseif GUI.ClearPropsFrame.Mode.Value == "Restore" then
-							-- Restore Occluded Models only
-							local restoredCount = RestoreAllOccludedModels()
-							if restoredCount > 0 then
-								notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
-							else
-								notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
-							end
-							notifier.Visible = true
-							notifierCount = notifierCount + 1
-							CoroutineLauncher("NotifierDelay")
-						end
+						-- Clear All Props - restore occluded models first, then clear props
+						RestoreAllOccludedModels()
+						rep.PropsCleared_Client:FireServer()
+						script.GUISounds.DeleteSound:Play()
+						ResetPropCount()
 					end
 					GUI.ClearPropsFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
+				elseif v:IsDescendantOf(GUI.ClearOccludedFrame) then
+					if v.Parent.Name == "Confirm" then
+						-- Restore Occluded Models only
+						local restoredCount = RestoreAllOccludedModels()
+						if restoredCount > 0 then
+							notifier.Text = "RESTORED " .. restoredCount .. " OCCLUDED MODEL" .. (restoredCount > 1 and "S" or "")
+						else
+							notifier.Text = "NO OCCLUDED MODELS TO RESTORE"
+						end
+						notifier.Visible = true
+						notifierCount = notifierCount + 1
+						CoroutineLauncher("NotifierDelay")
+					end
+					GUI.ClearOccludedFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "Out", "Sine", 0.2)
 				elseif v.Parent.Name == "MetaFrame" then
 					ToggleMetavision()
 				elseif v:IsDescendantOf(txtFrame) then

@@ -2931,11 +2931,17 @@ function SetupGameButtons()
 	for _,v in pairs(game.Players:GetChildren()) do
 		if v.Name ~= plr.Name then
 			if v.Character then
-				local newMeta = script.Parent.PlayerDisplay:Clone()
-				newMeta.Parent = v.Character:FindFirstChild("UpperTorso")
+				-- Apply appropriate Highlight based on friend status
+				local highlightTemplate
 				if plr:IsFriendsWith(v.UserId) then
-					newMeta.Display.ImageColor3 = Color3.new(0, 1, 0)
+					highlightTemplate = GUI.PlayerHighlights.FriendHighlight
+				else
+					highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
 				end
+				local newMeta = highlightTemplate:Clone()
+				newMeta.Adornee = v.Character
+				newMeta.Enabled = false
+				newMeta.Parent = v.Character
 				v.Character:WaitForChild("HumanState").Changed:Connect(function(state)
 					if state == "NonHumanoid" and equippedTool["Toggle"] == "Equipped" and 
 						toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
@@ -2944,14 +2950,17 @@ function SetupGameButtons()
 				end)
 			end
 			v.CharacterAdded:Connect(function(newChar)
-				local newMeta = script.Parent.PlayerDisplay:Clone()
-				newMeta.Parent = newChar:WaitForChild("UpperTorso")
+				-- Apply appropriate Highlight based on friend status
+				local highlightTemplate
 				if plr:IsFriendsWith(v.UserId) then
-					newMeta.Display.ImageColor3 = Color3.new(0, 1, 0)
+					highlightTemplate = GUI.PlayerHighlights.FriendHighlight
+				else
+					highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
 				end
-				if gameFrame.MetaFrame.On.Value then
-					newMeta.Display.Visible = true
-				end
+				local newMeta = highlightTemplate:Clone()
+				newMeta.Adornee = newChar
+				newMeta.Enabled = gameFrame.MetaFrame.On.Value
+				newMeta.Parent = newChar
 				if equippedTool["Variant"] == "Thermal Binoculars" and 
 					toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
 					NeonCharacter(newChar, "On")
@@ -2967,14 +2976,17 @@ function SetupGameButtons()
 	end
 	game.Players.PlayerAdded:Connect(function(newPlr)
 		newPlr.CharacterAdded:Connect(function(newChar)
-			local newMeta = script.Parent.PlayerDisplay:Clone()
-			newMeta.Parent = newChar:WaitForChild("UpperTorso")
+			-- Apply appropriate Highlight based on friend status
+			local highlightTemplate
 			if plr:IsFriendsWith(newPlr.UserId) then
-				newMeta.Display.ImageColor3 = Color3.new(0, 1, 0)
+				highlightTemplate = GUI.PlayerHighlights.FriendHighlight
+			else
+				highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
 			end
-			if gameFrame.MetaFrame.On.Value then
-				newMeta.Display.Visible = true
-			end
+			local newMeta = highlightTemplate:Clone()
+			newMeta.Adornee = newChar
+			newMeta.Enabled = gameFrame.MetaFrame.On.Value
+			newMeta.Parent = newChar
 			if equippedTool["Variant"] == "Thermal Binoculars" and 
 				toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
 				NeonCharacter(newChar, "On") 
@@ -5190,10 +5202,10 @@ function ToggleMetavision()
 	rep.Metavision:FireServer(newMode)
 	activated.Value = newMode
 	for _,v in pairs(game.Players:GetChildren()) do
-		local upperTorso = v.Character and v.Character:FindFirstChild("UpperTorso")
-		if upperTorso and upperTorso:FindFirstChild("PlayerDisplay") and upperTorso.CFrame.p.Y > -110 and 
-			not upperTorso:FindFirstChild("OriginalTransparency") then
-			upperTorso.PlayerDisplay.Display.Visible = newMode
+		local highlight = v.Character and v.Character:FindFirstChildOfClass("Highlight")
+		if highlight and v.Character.UpperTorso.CFrame.p.Y > -110 and
+			not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+			highlight.Enabled = newMode
 		end
 	end
 	if activated.Value then
@@ -5207,12 +5219,12 @@ function MetavisionUpdater()
 		wait(1)
 		if activated.Value then
 			for _,v in pairs(game.Players:GetChildren()) do
-				local upperTorso = v.Character and v.Character:FindFirstChild("UpperTorso")
-				if upperTorso and upperTorso:FindFirstChild("PlayerDisplay") then
-					if upperTorso.CFrame.p.Y > -110 and not upperTorso:FindFirstChild("OriginalTransparency") then
-						upperTorso.PlayerDisplay.Display.Visible = true
-					elseif upperTorso.CFrame.p.Y <= -110 or upperTorso:FindFirstChild("OriginalTransparency") then
-						upperTorso.PlayerDisplay.Display.Visible = false
+				local highlight = v.Character and v.Character:FindFirstChildOfClass("Highlight")
+				if highlight then
+					if v.Character.UpperTorso.CFrame.p.Y > -110 and not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+						highlight.Enabled = true
+					elseif v.Character.UpperTorso.CFrame.p.Y <= -110 or v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+						highlight.Enabled = false
 					end
 				end
 			end
@@ -5997,12 +6009,7 @@ human.Died:Connect(function()
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	PhyService:SetPartCollisionGroup(char.Head, "CharacterParts")
-	for _,v in pairs(game.Players:GetChildren()) do
-		local upperTorso = v.Character and v.Character:FindFirstChild("UpperTorso")
-		if upperTorso and upperTorso:FindFirstChild("PlayerDisplay") then
-			upperTorso.PlayerDisplay:Destroy()
-		end
-	end
+	-- Highlights are automatically destroyed with the character
 	if equippedTool["Toggle"] == "Equipped" then
 		local endEffect
 		for i,v in pairs(keyFunctions) do

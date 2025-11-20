@@ -448,7 +448,7 @@ function ClickAction()
 	local interacted = false
 
 	-- Handle Occluder Mode clicks
-	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget and mouseTarget.Parent then
+	if occluderMode and propFrame.Visible and mouseTarget and mouseTarget.Parent then
 		local currentMode = propFrame.ModeButton.Button.Mode.Value
 
 		if currentMode == "Build" then
@@ -921,7 +921,7 @@ function ClickAction()
 				elseif not utilityAnim and not isContinuous then
 					toolButton.SelectedItem.Value = false
 				end
-				if equippedTool["Variant"] == "Prop Placer" and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
+				if propFrame.Visible and dragProp["Mode"] and dragProp["Mode"] ~= "Orient" then
 					local previousMode = dragProp["Mode"]
 					local propCFrame = dragProp["Prop"].Prop.PrimaryPart.CFrame
 
@@ -1570,7 +1570,7 @@ function UserInput()
 				-- Can only edit one prop at a time (editingPropData must be nil)
 				-- Don't edit the dragProp if in continuous placing mode
 				-- Don't allow editing when Occluder Mode is on
-				if equippedTool["Variant"] == "Prop Placer" and propFrame.ModeButton.Button.Mode.Value == "Build" and
+				if propFrame.Visible and propFrame.ModeButton.Button.Mode.Value == "Build" and
 					not editingPropData and mouseState == "OwnedProp" and mouseTarget and
 					mouseTarget.Parent.Owner.Value == plr.Name and mouseTarget.Anchored and
 					(not dragProp["Prop"] or dragProp["Prop"] ~= mouseTarget.Parent) and not occluderMode then
@@ -1585,7 +1585,7 @@ function UserInput()
 				RelaxAction()
 			elseif input.KeyCode == Enum.KeyCode.B then
 				-- Toggle continuous prop placing (disabled when Occluder Mode is on)
-				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and not occluderMode then
+				if propFrame.Visible and not occluderMode then
 					continuousPlacing = not continuousPlacing
 					if continuousPlacing then
 						notifier.Text = "CONTINUOUS PLACING: ON"
@@ -1598,7 +1598,7 @@ function UserInput()
 				end
 			elseif input.KeyCode == Enum.KeyCode.O then
 				-- Toggle Occluder Mode
-				if equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
+				if propFrame.Visible then
 					occluderMode = not occluderMode
 					local currentMode = propFrame.ModeButton.Button.Mode.Value
 					if occluderMode then
@@ -6747,7 +6747,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 
 			-- Check if in Occluder Mode and hovering over an occludable model/part
 			local isOccludableModel = false
-			if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible and mouseTarget.Parent then
+			if occluderMode and propFrame.Visible and mouseTarget.Parent then
 				local currentMode = propFrame.ModeButton.Button.Mode.Value
 
 				if currentMode == "Build" then
@@ -6804,7 +6804,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	end
 
 	-- Occluder Mode highlight handling
-	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
+	if occluderMode and propFrame.Visible then
 		local currentMode = propFrame.ModeButton.Button.Mode.Value
 		local shouldHighlight = false
 		local highlightModel = nil
@@ -6863,7 +6863,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	end
 
 	-- Multiple highlights for ALL occluded models in Delete Mode
-	if occluderMode and equippedTool["Variant"] == "Prop Placer" and propFrame.Visible then
+	if occluderMode and propFrame.Visible then
 		local currentMode = propFrame.ModeButton.Button.Mode.Value
 		if currentMode == "Delete" then
 			-- Remove old highlights

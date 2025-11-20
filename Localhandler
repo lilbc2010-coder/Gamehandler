@@ -2928,20 +2928,39 @@ function SetupGameButtons()
 	for _,v in pairs(script.Radio:GetChildren()) do
 		v.Volume = 0.5
 	end
+	-- Initialize Highlight system for metavision
+	print("[Metavision] Initializing Highlight system...")
+	if not GUI:FindFirstChild("PlayerHighlights") then
+		warn("[Metavision] ERROR: PlayerHighlights folder not found in StarterGUI! Metavision will not work.")
+		warn("[Metavision] Please create a folder named 'PlayerHighlights' in StarterGUI with FriendHighlight and StrangerHighlight objects.")
+	else
+		print("[Metavision] PlayerHighlights folder found")
+		if not GUI.PlayerHighlights:FindFirstChild("FriendHighlight") then
+			warn("[Metavision] ERROR: FriendHighlight not found in PlayerHighlights folder!")
+		end
+		if not GUI.PlayerHighlights:FindFirstChild("StrangerHighlight") then
+			warn("[Metavision] ERROR: StrangerHighlight not found in PlayerHighlights folder!")
+		end
+	end
 	for _,v in pairs(game.Players:GetChildren()) do
 		if v.Name ~= plr.Name then
 			if v.Character then
 				-- Apply appropriate Highlight based on friend status
-				local highlightTemplate
-				if plr:IsFriendsWith(v.UserId) then
-					highlightTemplate = GUI.PlayerHighlights.FriendHighlight
-				else
-					highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
+				if GUI:FindFirstChild("PlayerHighlights") then
+					local highlightTemplate
+					if plr:IsFriendsWith(v.UserId) then
+						highlightTemplate = GUI.PlayerHighlights:FindFirstChild("FriendHighlight")
+					else
+						highlightTemplate = GUI.PlayerHighlights:FindFirstChild("StrangerHighlight")
+					end
+					if highlightTemplate then
+						local newMeta = highlightTemplate:Clone()
+						newMeta.Adornee = v.Character
+						newMeta.Enabled = false
+						newMeta.Parent = v.Character
+						print("[Metavision] Applied " .. highlightTemplate.Name .. " to " .. v.Name)
+					end
 				end
-				local newMeta = highlightTemplate:Clone()
-				newMeta.Adornee = v.Character
-				newMeta.Enabled = false
-				newMeta.Parent = v.Character
 				v.Character:WaitForChild("HumanState").Changed:Connect(function(state)
 					if state == "NonHumanoid" and equippedTool["Toggle"] == "Equipped" and 
 						toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
@@ -2951,16 +2970,21 @@ function SetupGameButtons()
 			end
 			v.CharacterAdded:Connect(function(newChar)
 				-- Apply appropriate Highlight based on friend status
-				local highlightTemplate
-				if plr:IsFriendsWith(v.UserId) then
-					highlightTemplate = GUI.PlayerHighlights.FriendHighlight
-				else
-					highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
+				if GUI:FindFirstChild("PlayerHighlights") then
+					local highlightTemplate
+					if plr:IsFriendsWith(v.UserId) then
+						highlightTemplate = GUI.PlayerHighlights:FindFirstChild("FriendHighlight")
+					else
+						highlightTemplate = GUI.PlayerHighlights:FindFirstChild("StrangerHighlight")
+					end
+					if highlightTemplate then
+						local newMeta = highlightTemplate:Clone()
+						newMeta.Adornee = newChar
+						newMeta.Enabled = gameFrame.MetaFrame.On.Value
+						newMeta.Parent = newChar
+						print("[Metavision] Applied " .. highlightTemplate.Name .. " to respawned " .. v.Name)
+					end
 				end
-				local newMeta = highlightTemplate:Clone()
-				newMeta.Adornee = newChar
-				newMeta.Enabled = gameFrame.MetaFrame.On.Value
-				newMeta.Parent = newChar
 				if equippedTool["Variant"] == "Thermal Binoculars" and 
 					toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
 					NeonCharacter(newChar, "On")
@@ -2977,16 +3001,21 @@ function SetupGameButtons()
 	game.Players.PlayerAdded:Connect(function(newPlr)
 		newPlr.CharacterAdded:Connect(function(newChar)
 			-- Apply appropriate Highlight based on friend status
-			local highlightTemplate
-			if plr:IsFriendsWith(newPlr.UserId) then
-				highlightTemplate = GUI.PlayerHighlights.FriendHighlight
-			else
-				highlightTemplate = GUI.PlayerHighlights.StrangerHighlight
+			if GUI:FindFirstChild("PlayerHighlights") then
+				local highlightTemplate
+				if plr:IsFriendsWith(newPlr.UserId) then
+					highlightTemplate = GUI.PlayerHighlights:FindFirstChild("FriendHighlight")
+				else
+					highlightTemplate = GUI.PlayerHighlights:FindFirstChild("StrangerHighlight")
+				end
+				if highlightTemplate then
+					local newMeta = highlightTemplate:Clone()
+					newMeta.Adornee = newChar
+					newMeta.Enabled = gameFrame.MetaFrame.On.Value
+					newMeta.Parent = newChar
+					print("[Metavision] Applied " .. highlightTemplate.Name .. " to new player " .. newPlr.Name)
+				end
 			end
-			local newMeta = highlightTemplate:Clone()
-			newMeta.Adornee = newChar
-			newMeta.Enabled = gameFrame.MetaFrame.On.Value
-			newMeta.Parent = newChar
 			if equippedTool["Variant"] == "Thermal Binoculars" and 
 				toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value then
 				NeonCharacter(newChar, "On") 
@@ -5201,13 +5230,17 @@ function ToggleMetavision()
 	end
 	rep.Metavision:FireServer(newMode)
 	activated.Value = newMode
+	print("[Metavision] Toggling metavision to: " .. tostring(newMode))
+	local highlightCount = 0
 	for _,v in pairs(game.Players:GetChildren()) do
 		local highlight = v.Character and v.Character:FindFirstChildOfClass("Highlight")
 		if highlight and v.Character.UpperTorso.CFrame.p.Y > -110 and
 			not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
 			highlight.Enabled = newMode
+			highlightCount = highlightCount + 1
 		end
 	end
+	print("[Metavision] Toggled " .. highlightCount .. " highlights")
 	if activated.Value then
 		CoroutineLauncher("MetavisionUpdater")
 	end

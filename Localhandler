@@ -56,7 +56,7 @@ local occludedModels = {}
 local occluderHighlight = nil
 local mat = Enum.Material
 local occluderHighlights = {}
-local propScrollPosition = 0
+local propOriginalPositions = {}
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
 local customizationRoom
@@ -1799,7 +1799,7 @@ function UserInput()
 						propFrame.ScrollFrame.Visible = false
 						propFrame.SearchBox.Visible = false
 						propFrame.SearchBox.Text = ""
-						propScrollPosition = 0
+						propOriginalPositions = {}
 						-- Show occluded models if in Delete Mode
 						if currentMode == "Delete" then
 							for _, occludedData in ipairs(occludedModels) do
@@ -4840,32 +4840,55 @@ function OrganizePropFrame(ownedProps)
 end
 
 function FilterPropList(searchText)
-	-- Filter prop list based on search text
+	-- Filter and reorder prop list based on search text
 	local searchLower = string.lower(searchText)
-	for _, button in pairs(propFrame.ScrollFrame:GetChildren()) do
-		if button.Name == "PropButton" then
-			local propName = string.lower(button.Button.ItemName.Text)
-			-- Show if search is empty or prop name contains search text
-			if searchText == "" or string.find(propName, searchLower, 1, true) then
-				button.Visible = true
-			else
-				button.Visible = false
-			end
-		end
+	local yAdd = 60
+	if platform == "Mobile" then
+		yAdd = 45
 	end
 
-	-- Scroll to top when searching, restore position when cleared
-	if searchText ~= "" then
-		-- Save current scroll position if not already saved
-		if propScrollPosition == 0 or propFrame.ScrollFrame.CanvasPosition.Y == 0 then
-			propScrollPosition = propFrame.ScrollFrame.CanvasPosition.Y
+	if searchText == "" then
+		-- Restore original positions when search is cleared
+		for button, originalPos in pairs(propOriginalPositions) do
+			if button and button.Parent then
+				button.Position = originalPos
+				button.Visible = true
+			end
 		end
-		-- Scroll to top
-		propFrame.ScrollFrame.CanvasPosition = Vector2.new(0, 0)
+		propOriginalPositions = {}
 	else
-		-- Restore original scroll position when search is cleared
-		propFrame.ScrollFrame.CanvasPosition = Vector2.new(0, propScrollPosition)
-		propScrollPosition = 0
+		-- Separate matching and non-matching props
+		local matchingButtons = {}
+		local nonMatchingButtons = {}
+
+		for _, button in pairs(propFrame.ScrollFrame:GetChildren()) do
+			if button.Name == "PropButton" then
+				-- Store original position if not already stored
+				if not propOriginalPositions[button] then
+					propOriginalPositions[button] = button.Position
+				end
+
+				local propName = string.lower(button.Button.ItemName.Text)
+				if string.find(propName, searchLower, 1, true) then
+					table.insert(matchingButtons, button)
+				else
+					table.insert(nonMatchingButtons, button)
+				end
+			end
+		end
+
+		-- Position matching buttons at the top
+		local y = 0
+		for _, button in ipairs(matchingButtons) do
+			button.Position = UDim2.new(0.025, 0, 0, y)
+			button.Visible = true
+			y = y + yAdd
+		end
+
+		-- Hide non-matching buttons
+		for _, button in ipairs(nonMatchingButtons) do
+			button.Visible = false
+		end
 	end
 end
 

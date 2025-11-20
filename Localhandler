@@ -314,7 +314,20 @@ function InteractiveAction()
 		end
 		local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
 		local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
-		local foreignCharImage = game.Players:GetUserThumbnailAsync(foreignPlrId, Enum.ThumbnailType.HeadShot, 
+
+		-- Check if metavision is on and player is a friend - show teleport prompt
+		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
+			if not tpFrame.Ready.Value then
+				tpFrame.Ready.Value = true
+				tpFrame.FriendTravel.Value = foreignPlr.Name
+				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
+				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
+			end
+			return interacted
+		end
+
+		local foreignCharImage = game.Players:GetUserThumbnailAsync(foreignPlrId, Enum.ThumbnailType.HeadShot,
 			Enum.ThumbnailSize.Size100x100)
 		local charBio = rep.CharacterBios:WaitForChild(foreignPlr.Name)
 		local toggleMeta, lastMeta = "OFF", "NEVER"
@@ -2529,9 +2542,17 @@ function TpFrameButtons()
 				tsFrame.BackgroundTransparency = 1
 				tsFrame.Visible = true
 				tsFrame.TransitionPhase.Value = "In"
-				rep.Teleport:InvokeServer("Transitioning_Map")
+				-- Check if this is a friend teleport
+				if tpFrame.FriendTravel.Value ~= "" then
+					rep.Teleport:InvokeServer("Transitioning_Friend", tpFrame.FriendTravel.Value)
+					print("[Friend Teleport] Initiating teleport to " .. tpFrame.FriendTravel.Value)
+					tpFrame.FriendTravel.Value = "" -- Clear the value after use
+				else
+					rep.Teleport:InvokeServer("Transitioning_Map")
+				end
 			else
 				rep.Teleport:InvokeServer("Cancel")
+				tpFrame.FriendTravel.Value = "" -- Clear friend travel on cancel
 			end
 			tpFrame.Ready.Value = false
 			tpFrame:TweenPosition(UDim2.new(0.7, 0, 1.7, 0), "Out", "Sine", 0)

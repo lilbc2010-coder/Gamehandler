@@ -2814,6 +2814,12 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 					plrStatus[plr.Name] = "Playing"
 					char.HumanoidRootPart.Anchored = false
 					char.Humanoid.WalkSpeed = 8
+				elseif typeof(location) == "table" and location.Type == "FriendTeleport" then
+					-- Friend teleport - simple position change with offset
+					local offset = Vector3.new(3, 0, 0)
+					char:SetPrimaryPartCFrame(location.Position + offset)
+					plrStatus[plr.Name] = "Playing"
+					print("[Friend Teleport] " .. plr.Name .. " arrived at friend's location")
 				elseif typeof(location) == "CFrame" then
 					char.Archivable = true
 					local falseChar = char:Clone()
@@ -2844,7 +2850,21 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 	elseif string.find(mode, "Transitioning") then
 		plrStatus[plr.Name] = "Teleporting"
 		local category = string.sub(mode, 15, string.len(mode))
-		if category ~= "Map" then
+		if category == "Friend" and setting then
+			-- Friend teleportation - get the friend's character position
+			local friendPlr = game.Players:FindFirstChild(setting)
+			if friendPlr and friendPlr.Character and friendPlr.Character.PrimaryPart then
+				-- Store as a table to distinguish from customizing mode CFrame
+				teleportingIndex[plr.Name] = {
+					Type = "FriendTeleport",
+					Position = friendPlr.Character.PrimaryPart.CFrame
+				}
+				print("[Friend Teleport] " .. plr.Name .. " teleporting to " .. setting)
+			else
+				print("[Friend Teleport] ERROR: Could not find friend " .. tostring(setting))
+				teleportingIndex[plr.Name] = nil
+			end
+		elseif category ~= "Map" then
 			teleportingIndex[plr.Name] = setting
 		else
 			local char = plr.Character

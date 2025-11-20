@@ -1853,6 +1853,10 @@ function UserInput()
 				end
 			elseif input.KeyCode == Enum.KeyCode.N then
 				-- Toggle Prop Placer UI on/off (works regardless of equipped tool)
+				-- Don't allow during inappropriate states
+				if plrState == "Dead" or plrState == "Customizing" or plrState == "Title" then
+					return
+				end
 				propFrame.Visible = not propFrame.Visible
 				if propFrame.Visible then
 					notifier.Text = "PROP PLACER: ON"
@@ -3610,6 +3614,8 @@ function InitializeButton(v)
 			if plrState ~= "Customizing" then
 				if v.Parent.Name == "CustomizeFrame" then
 					plrState = "Customizing"
+					-- Hide Prop Placer when entering Customize Menu
+					propFrame.Visible = false
 					if gameFrame.OOCFrame.On.Value then
 						gameFrame.OOCFrame.On.Value = false
 						rep.OOCModeUpdate:InvokeServer(false)
@@ -5881,6 +5887,8 @@ end)
 
 human.Died:Connect(function()
 	plrState = "Dead"
+	-- Hide Prop Placer on death
+	propFrame.Visible = false
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	PhyService:SetPartCollisionGroup(char.Head, "CharacterParts")

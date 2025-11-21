@@ -2814,6 +2814,12 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 					plrStatus[plr.Name] = "Playing"
 					char.HumanoidRootPart.Anchored = false
 					char.Humanoid.WalkSpeed = 8
+				elseif typeof(location) == "table" and location.Type == "FriendTeleport" then
+					-- Friend teleport - simple position change with offset
+					local offset = Vector3.new(3, 0, 0)
+					char:SetPrimaryPartCFrame(location.Position + offset)
+					plrStatus[plr.Name] = "Playing"
+					print("[Friend Teleport] " .. plr.Name .. " arrived at friend's location")
 				elseif typeof(location) == "CFrame" then
 					char.Archivable = true
 					local falseChar = char:Clone()
@@ -2844,7 +2850,51 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 	elseif string.find(mode, "Transitioning") then
 		plrStatus[plr.Name] = "Teleporting"
 		local category = string.sub(mode, 15, string.len(mode))
-		if category ~= "Map" then
+		if category == "Friend" and setting then
+			-- Friend teleportation - parse the position from the setting string
+			-- Format: "PlayerName|CFrame"
+			local separatorPos = string.find(setting, "|")
+			if separatorPos then
+				local friendName = string.sub(setting, 1, separatorPos - 1)
+				local cframeString = string.sub(setting, separatorPos + 1)
+
+				-- Parse the CFrame string (format: "x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22")
+				local success, friendPosition = pcall(function()
+					-- Remove any parentheses or extra whitespace
+					cframeString = string.gsub(cframeString, "[%(%)]", "")
+					local components = {}
+					for num in string.gmatch(cframeString, "[%-%d%.]+") do
+						table.insert(components, tonumber(num))
+					end
+					if #components >= 12 then
+						return CFrame.new(
+							components[1], components[2], components[3],
+							components[4], components[5], components[6],
+							components[7], components[8], components[9],
+							components[10], components[11], components[12]
+						)
+					elseif #components >= 3 then
+						return CFrame.new(components[1], components[2], components[3])
+					end
+					error("Invalid CFrame format")
+				end)
+
+				if success and friendPosition then
+					-- Store as a table to distinguish from customizing mode CFrame
+					teleportingIndex[plr.Name] = {
+						Type = "FriendTeleport",
+						Position = friendPosition
+					}
+					print("[Friend Teleport] " .. plr.Name .. " teleporting to " .. friendName .. "'s captured location")
+				else
+					print("[Friend Teleport] ERROR: Could not parse CFrame from setting")
+					teleportingIndex[plr.Name] = nil
+				end
+			else
+				print("[Friend Teleport] ERROR: Invalid setting format (missing separator)")
+				teleportingIndex[plr.Name] = nil
+			end
+		elseif category ~= "Map" then
 			teleportingIndex[plr.Name] = setting
 		else
 			local char = plr.Character

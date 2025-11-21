@@ -27,7 +27,7 @@ if plr.UserId > 0 then
 end
 local ownsServer = false
 local humanSpeed = 0
-local mouseIcons = {Hovering = "79967493897869", None = "71188516246141", OwnedProp = "81023683177299"}
+local mouseIcons = {Hovering = "79967493897869", None = "71188516246141", OwnedProp = "81023683177299", Player = "76431056170333"}
 local TNS1, TNS2 = 'http://www.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid=', '&fmt=png&wd=420&ht=420'
 mouseIcon.Image = TNS1..mouseIcons["None"]..TNS2
 local cam = game.Workspace.Camera
@@ -5320,11 +5320,13 @@ function ToggleMetavision()
 	print("[Metavision] Toggling metavision to: " .. tostring(newMode))
 	local highlightCount = 0
 	for _,v in pairs(game.Players:GetChildren()) do
-		local highlight = v.Character and v.Character:FindFirstChildOfClass("Highlight")
-		if highlight and v.Character.UpperTorso.CFrame.p.Y > -110 and
-			not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
-			highlight.Enabled = newMode
-			highlightCount = highlightCount + 1
+		if v.Character and v.Character:FindFirstChild("UpperTorso") then
+			local highlight = v.Character:FindFirstChildOfClass("Highlight")
+			if highlight and v.Character.UpperTorso.CFrame.p.Y > -110 and
+				not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+				highlight.Enabled = newMode
+				highlightCount = highlightCount + 1
+			end
 		end
 	end
 	print("[Metavision] Toggled " .. highlightCount .. " highlights")
@@ -5339,12 +5341,14 @@ function MetavisionUpdater()
 		wait(1)
 		if activated.Value then
 			for _,v in pairs(game.Players:GetChildren()) do
-				local highlight = v.Character and v.Character:FindFirstChildOfClass("Highlight")
-				if highlight then
-					if v.Character.UpperTorso.CFrame.p.Y > -110 and not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
-						highlight.Enabled = true
-					elseif v.Character.UpperTorso.CFrame.p.Y <= -110 or v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
-						highlight.Enabled = false
+				if v.Character and v.Character:FindFirstChild("UpperTorso") then
+					local highlight = v.Character:FindFirstChildOfClass("Highlight")
+					if highlight then
+						if v.Character.UpperTorso.CFrame.p.Y > -110 and not v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+							highlight.Enabled = true
+						elseif v.Character.UpperTorso.CFrame.p.Y <= -110 or v.Character.UpperTorso:FindFirstChild("OriginalTransparency") then
+							highlight.Enabled = false
+						end
 					end
 				end
 			end
@@ -7233,9 +7237,9 @@ stepconnection = RunService.RenderStepped:Connect(function()
 				mouseState = "OwnedProp"
 				mouseIcon.NameTag.Text = ""
 			elseif isHumanoid then
-				mouseState = "Hovering"
+				mouseState = "Player"
 				mouseIcon.NameTag.Text = isHumanoid.Name
-			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or
+			elseif (mouseState == "Hovering" or mouseState == "OwnedProp" or mouseState == "Player") and not (mouseTarget.Name == "OwnedProp" or
 				mouseTarget.Name == "Click" or isHumanoid or isOccludableModel) then
 				mouseState = "None"
 				mouseIcon.NameTag.Text = ""

@@ -284,6 +284,67 @@ function SprintAction(inputMethod)
 	end
 end
 
+-- Function to show player bio (right-click on players)
+function ShowPlayerBio()
+	if not CheckIfPartIsHumanoid(mouseTarget) then
+		return false
+	end
+
+	local foreignChar = CheckIfPartIsHumanoid(mouseTarget)
+	local foreignCharName
+	for _,n in pairs(foreignChar:GetChildren()) do
+		if n:FindFirstChild("Humanoid") then
+			foreignCharName = n.Name
+			break
+		end
+	end
+	local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
+	local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
+
+	local foreignCharImage = game.Players:GetUserThumbnailAsync(foreignPlrId, Enum.ThumbnailType.HeadShot,
+		Enum.ThumbnailSize.Size100x100)
+	local charBio = rep.CharacterBios:WaitForChild(foreignPlr.Name)
+	local toggleMeta, lastMeta = "OFF", "NEVER"
+	if charBio.ToggleMeta.Value then
+		toggleMeta = "ON"
+	end
+	if charBio.LastMeta.Value ~= "NEVER" then
+		local t, lM = os.time(), charBio.LastMeta.Value
+		local s = tostring(math.max((t - (t % 1)) - (lM - (lM % 1)), 0))
+		local m = math.floor(s / 60)
+		s = s % 60
+		lastMeta = m.."m "..s.."s ago"
+	end
+	plrFrame.CharacterFrame.Image = foreignCharImage
+	plrFrame.CharName.Text = foreignCharName.." ("..foreignPlr.Name..")"
+	plrFrame.CharBio.Text = charBio.Value
+	plrFrame.Level.Text = "Level "..charBio.Level.Value
+	plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
+	plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
+	plrFrame.Visible = true
+	characterBioName = foreignPlr.Name
+	while characterBioName == foreignPlr.Name do
+		wait(1)
+		if charBio.LastMeta.Value ~= "NEVER" then
+			if charBio.ToggleMeta.Value then
+				toggleMeta = "ON"
+			else
+				toggleMeta = "OFF"
+			end
+			local t, lM = os.time(), charBio.LastMeta.Value
+			local s = tostring(math.max((t - (t % 1)) - (lM - (lM % 1)), 0))
+			local m = math.floor(s / 60)
+			s = s % 60
+			lastMeta = m.."m "..s.."s ago"
+			plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
+		end
+		if charBio.LastRoll.Value ~= 0 then
+			plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
+		end
+	end
+	return true
+end
+
 function InteractiveAction()
 	local interacted = false
 	print("[Friend Teleport Debug] InteractiveAction called, mouseTarget: " .. tostring(mouseTarget and mouseTarget.Name or "nil"))
@@ -323,11 +384,15 @@ function InteractiveAction()
 		-- Check if metavision is on and player is a friend - show teleport prompt
 		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
 			print("[Friend Teleport Debug] Conditions met! Showing teleport frame")
+			-- Capture the friend's position NOW (not when they confirm)
+			local friendPosition = foreignChar.PrimaryPart.CFrame
+
 			if not tpFrame.Ready.Value then
 				tpFrame.Ready.Value = true
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
-					friendTravelValue.Value = foreignPlr.Name
+					-- Store the friend's name and position as a serialized string
+					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
 				end
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
@@ -341,57 +406,14 @@ function InteractiveAction()
 				tpFrame.Ready.Value = true
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
-					friendTravelValue.Value = foreignPlr.Name
+					-- Store the friend's name and position as a serialized string
+					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
 				end
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
 				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name .. " (after reset)")
 			end
 			return interacted
-		else
-			print("[Friend Teleport Debug] Conditions NOT met, showing normal bio frame")
-		end
-
-		local foreignCharImage = game.Players:GetUserThumbnailAsync(foreignPlrId, Enum.ThumbnailType.HeadShot,
-			Enum.ThumbnailSize.Size100x100)
-		local charBio = rep.CharacterBios:WaitForChild(foreignPlr.Name)
-		local toggleMeta, lastMeta = "OFF", "NEVER"
-		if charBio.ToggleMeta.Value then
-			toggleMeta = "ON"
-		end
-		if charBio.LastMeta.Value ~= "NEVER" then
-			local t, lM = os.time(), charBio.LastMeta.Value
-			local s = tostring(math.max((t - (t % 1)) - (lM - (lM % 1)), 0))
-			local m = math.floor(s / 60)
-			s = s % 60
-			lastMeta = m.."m "..s.."s ago"
-		end
-		plrFrame.CharacterFrame.Image = foreignCharImage
-		plrFrame.CharName.Text = foreignCharName.." ("..foreignPlr.Name..")"
-		plrFrame.CharBio.Text = charBio.Value
-		plrFrame.Level.Text = "Level "..charBio.Level.Value
-		plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
-		plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
-		plrFrame.Visible = true
-		characterBioName = foreignPlr.Name
-		while characterBioName == foreignPlr.Name do
-			wait(1)
-			if charBio.LastMeta.Value ~= "NEVER" then
-				if charBio.ToggleMeta.Value then
-					toggleMeta = "ON"
-				else
-					toggleMeta = "OFF"
-				end
-				local t, lM = os.time(), charBio.LastMeta.Value
-				local s = tostring(math.max((t - (t % 1)) - (lM - (lM % 1)), 0))
-				local m = math.floor(s / 60)
-				s = s % 60
-				lastMeta = m.."m "..s.."s ago"
-				plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
-			end
-			if charBio.LastRoll.Value ~= 0 then
-				plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
-			end
 		end
 	end
 end
@@ -1730,6 +1752,10 @@ function UserInput()
 				leftMouseDown = true
 				if not gameProcessedEvent then
 					ClickAction()
+				end
+			elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+				if not gameProcessedEvent then
+					ShowPlayerBio()
 				end
 			elseif input.KeyCode == Enum.KeyCode.Space and humanStates["resting"] then
 				HumanoidEvent("Jumping")

@@ -321,18 +321,6 @@ function ShowPlayerBio()
 	plrFrame.Level.Text = "Level "..charBio.Level.Value
 	plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
 	plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
-
-	-- Show/hide teleport button based on metavision and friend status
-	if plrFrame:FindFirstChild("TeleportButton") then
-		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
-			plrFrame.TeleportButton.Visible = true
-			-- Store player name for teleportation (position will be captured on confirm)
-			plrFrame.TeleportButton.TargetPlayer.Value = foreignPlr.Name
-		else
-			plrFrame.TeleportButton.Visible = false
-		end
-	end
-
 	plrFrame.Visible = true
 	characterBioName = foreignPlr.Name
 	while characterBioName == foreignPlr.Name do
@@ -375,6 +363,44 @@ function InteractiveAction()
 			end
 		end
 		CoroutineLauncher("MouseCooldown")
+	elseif CheckIfPartIsHumanoid(mouseTarget) then
+		interacted = true
+		local foreignChar = CheckIfPartIsHumanoid(mouseTarget)
+		local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
+		if foreignPlr then
+			local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
+
+			-- Check if metavision is on and player is a friend - show teleport prompt
+			if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
+				print("[Friend Teleport] Clicked on friend: " .. foreignPlr.Name)
+				-- Store only the friend's NAME (position will be captured on confirm)
+				if not tpFrame.Ready.Value then
+					tpFrame.Ready.Value = true
+					local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+					if friendTravelValue then
+						friendTravelValue.Value = foreignPlr.Name
+					end
+					tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
+					tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+					print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
+				else
+					print("[Friend Teleport] tpFrame.Ready.Value is already true, forcing reset")
+					-- Force reset if stuck
+					tpFrame.Ready.Value = false
+					wait()
+					-- Retry
+					tpFrame.Ready.Value = true
+					local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+					if friendTravelValue then
+						friendTravelValue.Value = foreignPlr.Name
+					end
+					tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
+					tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+					print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name .. " (after reset)")
+				end
+				return interacted
+			end
+		end
 	end
 end
 
@@ -4269,25 +4295,6 @@ function InitializeButton(v)
 						ToggleTool(v, toolboxFrame)
 					else
 						v.Parent.DisplayToggleDebounce.Value = false
-					end
-				elseif v.Parent.Name == "TeleportButton" and v:IsDescendantOf(plrFrame) then
-					-- Handle friend teleport button click
-					if plrFrame.TeleportButton:FindFirstChild("TargetPlayer") then
-						local friendName = plrFrame.TeleportButton.TargetPlayer.Value
-						if friendName and friendName ~= "" then
-							-- Show teleport confirmation dialog
-							if not tpFrame.Ready.Value then
-								tpFrame.Ready.Value = true
-								local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
-								if friendTravelValue then
-									-- Store only the friend's NAME (position captured on confirm)
-									friendTravelValue.Value = friendName
-								end
-								tpFrame.Label.Text = "Travel to " .. friendName .. "?"
-								tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
-								print("[Friend Teleport] Showing teleport prompt for " .. friendName)
-							end
-						end
 					end
 				elseif v.Parent.Name == "ToggleFrame" and v:IsDescendantOf(plrFrame) then
 					plrFrame.Visible = false

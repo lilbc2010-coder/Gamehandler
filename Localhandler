@@ -321,6 +321,18 @@ function ShowPlayerBio()
 	plrFrame.Level.Text = "Level "..charBio.Level.Value
 	plrFrame.LastMeta.Text = "Metavision: "..toggleMeta.." - "..lastMeta
 	plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
+
+	-- Show/hide teleport button based on metavision and friend status
+	if plrFrame:FindFirstChild("TeleportButton") then
+		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
+			plrFrame.TeleportButton.Visible = true
+			-- Store player name for teleportation (position will be captured on confirm)
+			plrFrame.TeleportButton.TargetPlayer.Value = foreignPlr.Name
+		else
+			plrFrame.TeleportButton.Visible = false
+		end
+	end
+
 	plrFrame.Visible = true
 	characterBioName = foreignPlr.Name
 	while characterBioName == foreignPlr.Name do
@@ -347,13 +359,12 @@ end
 
 function InteractiveAction()
 	local interacted = false
-	print("[Friend Teleport Debug] InteractiveAction called, mouseTarget: " .. tostring(mouseTarget and mouseTarget.Name or "nil"))
 	if mouseTarget.Name == "Click" and not mouseCooldown and not mouseTarget.Parent.Debounce.Value and not propFrame.Visible then
 		interacted, mouseCooldown = true, true
 		local tp = mouseTarget.Parent:FindFirstChild("Type")
 		if not humanStates["resting"] and tp then
 			if (humanState ~= "Humanoid" and (tp.Value == "Chair" or tp.Value == "Bed")) or
-				(equippedTool["Toggle"] == "Equipped" and string.find(equippedTool["Slot"], "Utility") and 
+				(equippedTool["Toggle"] == "Equipped" and string.find(equippedTool["Slot"], "Utility") and
 					toolboxFrame:FindFirstChild(equippedTool["Slot"]).SelectedItem.Value) then
 				interacted, mouseCooldown = false, false
 				return
@@ -364,57 +375,6 @@ function InteractiveAction()
 			end
 		end
 		CoroutineLauncher("MouseCooldown")
-	elseif CheckIfPartIsHumanoid(mouseTarget) then
-		interacted = true
-		local foreignChar = CheckIfPartIsHumanoid(mouseTarget)
-		local foreignCharName
-		for _,n in pairs(foreignChar:GetChildren()) do
-			if n:FindFirstChild("Humanoid") then
-				foreignCharName = n.Name
-				break
-			end
-		end
-		local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
-		local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
-
-		print("[Friend Teleport Debug] Clicked on player: " .. foreignPlr.Name)
-		print("[Friend Teleport Debug] Metavision On: " .. tostring(gameFrame.MetaFrame.On.Value))
-		print("[Friend Teleport Debug] Is Friend: " .. tostring(plr:IsFriendsWith(foreignPlrId)))
-
-		-- Check if metavision is on and player is a friend - show teleport prompt
-		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
-			print("[Friend Teleport Debug] Conditions met! Showing teleport frame")
-			-- Capture the friend's position NOW (not when they confirm)
-			local friendPosition = foreignChar.PrimaryPart.CFrame
-
-			if not tpFrame.Ready.Value then
-				tpFrame.Ready.Value = true
-				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
-				if friendTravelValue then
-					-- Store the friend's name and position as a serialized string
-					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
-				end
-				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
-				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
-				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
-			else
-				print("[Friend Teleport Debug] tpFrame.Ready.Value is already true, forcing reset")
-				-- Force reset if stuck
-				tpFrame.Ready.Value = false
-				wait()
-				-- Retry
-				tpFrame.Ready.Value = true
-				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
-				if friendTravelValue then
-					-- Store the friend's name and position as a serialized string
-					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
-				end
-				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
-				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
-				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name .. " (after reset)")
-			end
-			return interacted
-		end
 	end
 end
 
@@ -2596,8 +2556,18 @@ function TpFrameButtons()
 				-- Check if this is a friend teleport
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue and friendTravelValue.Value ~= "" then
-					rep.Teleport:InvokeServer("Transitioning_Friend", friendTravelValue.Value)
-					print("[Friend Teleport] Initiating teleport to " .. friendTravelValue.Value)
+					-- Capture friend's position NOW (on confirm)
+					local friendName = friendTravelValue.Value
+					local targetPlayer = game.Players:FindFirstChild(friendName)
+					if targetPlayer and targetPlayer.Character and targetPlayer.Character.PrimaryPart then
+						local friendPosition = targetPlayer.Character.PrimaryPart.CFrame
+						local teleportData = friendName .. "|" .. tostring(friendPosition)
+						rep.Teleport:InvokeServer("Transitioning_Friend", teleportData)
+						print("[Friend Teleport] Initiating teleport to " .. friendName .. " at current position")
+					else
+						print("[Friend Teleport] ERROR: Could not find player " .. friendName)
+						rep.Teleport:InvokeServer("Cancel")
+					end
 					friendTravelValue.Value = "" -- Clear the value after use
 				else
 					rep.Teleport:InvokeServer("Transitioning_Map")
@@ -4299,6 +4269,25 @@ function InitializeButton(v)
 						ToggleTool(v, toolboxFrame)
 					else
 						v.Parent.DisplayToggleDebounce.Value = false
+					end
+				elseif v.Parent.Name == "TeleportButton" and v:IsDescendantOf(plrFrame) then
+					-- Handle friend teleport button click
+					if plrFrame.TeleportButton:FindFirstChild("TargetPlayer") then
+						local friendName = plrFrame.TeleportButton.TargetPlayer.Value
+						if friendName and friendName ~= "" then
+							-- Show teleport confirmation dialog
+							if not tpFrame.Ready.Value then
+								tpFrame.Ready.Value = true
+								local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+								if friendTravelValue then
+									-- Store only the friend's NAME (position captured on confirm)
+									friendTravelValue.Value = friendName
+								end
+								tpFrame.Label.Text = "Travel to " .. friendName .. "?"
+								tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+								print("[Friend Teleport] Showing teleport prompt for " .. friendName)
+							end
+						end
 					end
 				elseif v.Parent.Name == "ToggleFrame" and v:IsDescendantOf(plrFrame) then
 					plrFrame.Visible = false
@@ -7190,7 +7179,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 
 	local lastMouseState = mouseState
 	if platform == "Desktop" then
-		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
+		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 5000)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 		if mouseTarget then
 			local isHumanoid = CheckIfPartIsHumanoid(mouseTarget)
@@ -7249,7 +7238,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 			mouseIcon.NameTag.Text = ""
 		end
 	elseif platform == "Mobile" and leftMouseDown then
-		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
+		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 5000)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 	end
 

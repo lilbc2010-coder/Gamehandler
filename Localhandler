@@ -333,7 +333,19 @@ function InteractiveAction()
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
 				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
 			else
-				print("[Friend Teleport Debug] tpFrame.Ready.Value is already true")
+				print("[Friend Teleport Debug] tpFrame.Ready.Value is already true, forcing reset")
+				-- Force reset if stuck
+				tpFrame.Ready.Value = false
+				wait()
+				-- Retry
+				tpFrame.Ready.Value = true
+				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+				if friendTravelValue then
+					friendTravelValue.Value = foreignPlr.Name
+				end
+				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
+				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name .. " (after reset)")
 			end
 			return interacted
 		else
@@ -2597,6 +2609,12 @@ if not tpFrame:FindFirstChild("FriendTravel") then
 	friendTravel.Value = ""
 	friendTravel.Parent = tpFrame
 	print("[Friend Teleport] Created FriendTravel StringValue in TeleportFrame")
+end
+
+-- Initialize Ready value to false (idle state)
+if tpFrame:FindFirstChild("Ready") then
+	tpFrame.Ready.Value = false
+	print("[Friend Teleport] Reset tpFrame.Ready.Value to false")
 end
 
 TpFrameButtons()

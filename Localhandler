@@ -2581,7 +2581,7 @@ function SetupGameButtons()
 	end
 	for _,v in pairs(charFrame.ItemScrollFrame:GetChildren()) do
 		for _,n in pairs(v:GetChildren()) do
-			if n.Button.NameTag.Text ~= "None" then
+			if n:FindFirstChild("Button") and n.Button.NameTag.Text ~= "None" then
 				local morph = rep.Morphs:FindFirstChild(n.Button.NameTag.Text)
 				local pass = morph:FindFirstChild("Pass")
 				local levelReq = morph:FindFirstChild("LevelReq")
@@ -2598,7 +2598,7 @@ function SetupGameButtons()
 	end
 	for _,v in pairs(charFrame.ItemScrollFrame:GetChildren()) do
 		for _,n in pairs(v:GetChildren()) do
-			if n.Button.NameTag.Text ~= "None" then
+			if n:FindFirstChild("Button") and n.Button.NameTag.Text ~= "None" then
 				local morph = rep.Morphs:FindFirstChild(n.Button.NameTag.Text)
 				local pass = morph:FindFirstChild("Pass")
 				local levelReq = morph:FindFirstChild("LevelReq")
@@ -2615,7 +2615,7 @@ function SetupGameButtons()
 	end
 	for _,v in pairs(toolFrame.VariantFrame.VariantScrollFrame:GetChildren()) do
 		for _,n in pairs(v:GetChildren()) do
-			if n.Button.NameTag.Text ~= "None" then
+			if n:FindFirstChild("Button") and n.Button.NameTag.Text ~= "None" then
 				local pass = rep.Tools:FindFirstChild(n.Base.Value):FindFirstChild(n.Button.NameTag.Text):FindFirstChild("Pass")
 				if pass then
 					local itemOwned = toolList[n.Button.NameTag.Text]

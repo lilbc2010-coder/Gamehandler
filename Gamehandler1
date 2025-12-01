@@ -1395,15 +1395,18 @@ rep.ToolInteraction.OnServerEvent:Connect(function(plr, interaction, baseName, v
 					tool.Top.Smoke:Emit(40)
 				end
 				CoroutineLauncher("PlaySound", tool.Handle, "ToolSounds", sound, 0, pitchRange, vol)
-				if (tool.Handle.CFrame.p - work.AncientTemple.FartGate.PrimaryPart.CFrame.p).magnitude < 10 then
-					rep.TempleDoorsUpdate_Client:FireClient(plr, work.AncientTemple.FartGate)
-					local gate = work.AncientTemple.FartGate
-					for _,v in pairs(gate:GetChildren()) do
-						v.Transparency = 0.5
-					end
-					wait(5)
-					for _,v in pairs(gate:GetChildren()) do
-						v.Transparency = 0
+				local ancientTemple = work:FindFirstChild("AncientTemple")
+				if ancientTemple and ancientTemple:FindFirstChild("FartGate") then
+					if (tool.Handle.CFrame.p - ancientTemple.FartGate.PrimaryPart.CFrame.p).magnitude < 10 then
+						rep.TempleDoorsUpdate_Client:FireClient(plr, ancientTemple.FartGate)
+						local gate = ancientTemple.FartGate
+						for _,v in pairs(gate:GetChildren()) do
+							v.Transparency = 0.5
+						end
+						wait(5)
+						for _,v in pairs(gate:GetChildren()) do
+							v.Transparency = 0
+						end
 					end
 				end
 			elseif interaction == "ARGBlast" then

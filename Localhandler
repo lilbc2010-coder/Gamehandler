@@ -3508,33 +3508,37 @@ function InitializeButton(v)
 							currencyFrame:TweenPosition(UDim2.new(0.35, 0, 0.3, 0), "In", "Sine", moveTime)
 						end
 					else
-						notifier.Text = "LOADING"
-						notifier.Visible = true
-						local approved
-						if humanState == "Humanoid" then
-							approved = rep.LoadItem:InvokeServer("ToolChange", v.Parent.Base.Value, 
-								v.NameTag.Text, toolFrame.ToolMode.Value)
-						else
-							approved = false
-						end
-						if approved then
+						-- If in customization mode and Tools tab, only show preview (don't call server)
+						if plrState == "Customizing" and customizeFrame.Mode.Value == "Tools" and
+							(toolFrame.ToolMode.Value == "Primary" or toolFrame.ToolMode.Value == "Secondary") then
 							toolFrame:FindFirstChild(toolFrame.ToolMode.Value.."Button").Label.Text = v.NameTag.Text
 							AssignTool(v.NameTag.Text, v.Parent.Base.Value, toolboxFrame:FindFirstChild(toolFrame.ToolMode.Value))
-							notifierCount = 0
-							notifier.Visible = false
-
-							-- Display weapon preview for Primary and Secondary tools
-							if toolFrame.ToolMode.Value == "Primary" or toolFrame.ToolMode.Value == "Secondary" then
-								DisplayWeaponPreview(v.Parent.Base.Value, v.NameTag.Text)
-							end
+							DisplayWeaponPreview(v.Parent.Base.Value, v.NameTag.Text)
 						else
-							notifierCount = notifierCount + 1
-							notifier.Text = "UNAVAILABLE"
-							toolFrame:FindFirstChild(toolFrame.ToolMode.Value.."Button").Label.Text = "None"
-							local toolBoxFrame = toolboxFrame:FindFirstChild(toolFrame.ToolMode.Value)
-							toolBoxFrame.Button.Text = "None"
-							toolBoxFrame.Base.Value = "None"
-							CoroutineLauncher("NotifierDelay")
+							-- Normal flow: call server to actually equip the weapon
+							notifier.Text = "LOADING"
+							notifier.Visible = true
+							local approved
+							if humanState == "Humanoid" then
+								approved = rep.LoadItem:InvokeServer("ToolChange", v.Parent.Base.Value,
+									v.NameTag.Text, toolFrame.ToolMode.Value)
+							else
+								approved = false
+							end
+							if approved then
+								toolFrame:FindFirstChild(toolFrame.ToolMode.Value.."Button").Label.Text = v.NameTag.Text
+								notifierCount = 0
+								notifier.Visible = false
+								AssignTool(v.NameTag.Text, v.Parent.Base.Value, toolboxFrame:FindFirstChild(toolFrame.ToolMode.Value))
+							else
+								notifierCount = notifierCount + 1
+								notifier.Text = "UNAVAILABLE"
+								toolFrame:FindFirstChild(toolFrame.ToolMode.Value.."Button").Label.Text = "None"
+								local toolBoxFrame = toolboxFrame:FindFirstChild(toolFrame.ToolMode.Value)
+								toolBoxFrame.Button.Text = "None"
+								toolBoxFrame.Base.Value = "None"
+								CoroutineLauncher("NotifierDelay")
+							end
 						end
 					end
 				elseif v.Parent.Name == "ToolButton" then

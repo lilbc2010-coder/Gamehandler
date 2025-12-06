@@ -343,6 +343,21 @@ game.Players.PlayerAdded:Connect(function(plr)
 		collisionPart.Parent = char
 		local bodyProperties, accessoryProperties = PhysicalProperties.new(1.2, 0.3, 0.5, 1, 1), 
 			PhysicalProperties.new(0.01, 0.3, 0.5, 1, 1)
+		-- Remove layered clothing and other non-standard accessories that can break the game
+		for _,v in pairs(char:GetChildren()) do
+			if v:IsA("Accessory") then
+				-- Remove layered clothing accessories (they don't have standard Handle/Mesh structure)
+				local accessoryType = v.AccessoryType
+				if accessoryType == Enum.AccessoryType.Jacket or accessoryType == Enum.AccessoryType.Sweater or
+					accessoryType == Enum.AccessoryType.TShirt or accessoryType == Enum.AccessoryType.Shirt or
+					accessoryType == Enum.AccessoryType.Pants or accessoryType == Enum.AccessoryType.Shorts or
+					accessoryType == Enum.AccessoryType.LeftShoe or accessoryType == Enum.AccessoryType.RightShoe or
+					accessoryType == Enum.AccessoryType.DressSkirt then
+					v:Destroy()
+				end
+			end
+		end
+
 		for _,v in pairs(char:GetChildren()) do
 			if v:IsA("BasePart") then
 				v.CustomPhysicalProperties = bodyProperties
@@ -361,29 +376,50 @@ game.Players.PlayerAdded:Connect(function(plr)
 			local charInfo = game.Players:GetCharacterAppearanceInfoAsync(plr.UserId)
 			for _,v in pairs(charInfo["assets"]) do
 				if v["assetType"]["name"] == "Hat" or string.find(v["assetType"]["name"], "Accessory") then
-					local loadedAccessory = InsertService:LoadAsset(v["id"])
-					local meshId
-					for _,n in pairs(loadedAccessory:GetChildren()) do
-						if not n.Handle:FindFirstChild("Mesh") then
-							n.Handle.SpecialMesh.Name = "Mesh"
-						end
-						meshId = n.Handle.Mesh.MeshId
-						break
+					-- Skip layered clothing types that don't have standard Handle/Mesh structure
+					local assetTypeName = v["assetType"]["name"]
+					if assetTypeName == "JacketAccessory" or assetTypeName == "SweaterAccessory" or
+						assetTypeName == "TShirtAccessory" or assetTypeName == "ShirtAccessory" or
+						assetTypeName == "PantsAccessory" or assetTypeName == "ShortsAccessory" or
+						assetTypeName == "LeftShoeAccessory" or assetTypeName == "RightShoeAccessory" or
+						assetTypeName == "DressSkirtAccessory" then
+						continue
 					end
-					for _,n in pairs(char.Humanoid:GetAccessories()) do
-						if not n.Handle:FindFirstChild("Mesh") then
-							n.Handle.SpecialMesh.Name = "Mesh"
+
+					local success, err = pcall(function()
+						local loadedAccessory = InsertService:LoadAsset(v["id"])
+						local meshId
+						for _,n in pairs(loadedAccessory:GetChildren()) do
+							if n:FindFirstChild("Handle") and n.Handle:FindFirstChild("SpecialMesh") then
+								if not n.Handle:FindFirstChild("Mesh") then
+									n.Handle.SpecialMesh.Name = "Mesh"
+								end
+								meshId = n.Handle.Mesh.MeshId
+								break
+							end
 						end
-						if n.Handle.Mesh.MeshId == meshId then
-							gameData[plr.Name]["Server"]["Accessories"]["id"..v["id"]] = {Name = n.Name, Object = n}
-							local originalId = Instance.new("NumberValue")
-							originalId.Name = "OriginalId"
-							originalId.Value = v["id"]
-							originalId.Parent = n.Handle.Mesh
-							break
+						if meshId then
+							for _,n in pairs(char.Humanoid:GetAccessories()) do
+								if n:FindFirstChild("Handle") and n.Handle:FindFirstChild("SpecialMesh") then
+									if not n.Handle:FindFirstChild("Mesh") then
+										n.Handle.SpecialMesh.Name = "Mesh"
+									end
+									if n.Handle.Mesh.MeshId == meshId then
+										gameData[plr.Name]["Server"]["Accessories"]["id"..v["id"]] = {Name = n.Name, Object = n}
+										local originalId = Instance.new("NumberValue")
+										originalId.Name = "OriginalId"
+										originalId.Value = v["id"]
+										originalId.Parent = n.Handle.Mesh
+										break
+									end
+								end
+							end
 						end
+						loadedAccessory:Destroy()
+					end)
+					if not success then
+						warn("Failed to load accessory " .. v["id"] .. ": " .. tostring(err))
 					end
-					loadedAccessory:Destroy()
 				end
 			end
 			local headSize = charInfo["scales"]["head"]

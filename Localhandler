@@ -332,6 +332,15 @@ function InteractiveAction()
 		plrFrame.LastRoll.Text = "Last d20 Roll: ".. tostring(charBio.LastRoll.Value)
 		plrFrame.Visible = true
 		characterBioName = foreignPlr.Name
+
+		-- Friend teleportation with metavision
+		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlr.UserId) then
+			local targetChar = foreignChar
+			if targetChar and targetChar.PrimaryPart and targetChar.PrimaryPart.CFrame.p.Y > -110 then
+				-- Trigger teleport confirmation
+				rep.Teleport:InvokeServer("TransitioningFriend", foreignPlr.Name)
+			end
+		end
 		while characterBioName == foreignPlr.Name do
 			wait(1)
 			if charBio.LastMeta.Value ~= "NEVER" then
@@ -2152,6 +2161,27 @@ function SetupGameButtons()
 	for _,v in pairs(script.Radio:GetChildren()) do
 		v.Volume = 0.5
 	end
+
+	-- Create PlayerDisplay template if it doesn't exist
+	if not script.Parent:FindFirstChild("PlayerDisplay") then
+		local playerDisplay = Instance.new("BillboardGui")
+		playerDisplay.Name = "PlayerDisplay"
+		playerDisplay.Size = UDim2.new(4, 0, 5, 0)
+		playerDisplay.StudsOffset = Vector3.new(0, 0, 0)
+		playerDisplay.AlwaysOnTop = true
+		playerDisplay.Parent = script.Parent
+
+		local display = Instance.new("ImageLabel")
+		display.Name = "Display"
+		display.Size = UDim2.new(1, 0, 1, 0)
+		display.BackgroundTransparency = 1
+		display.Image = "rbxassetid://5158623081"
+		display.ImageColor3 = Color3.new(1, 0, 0)
+		display.ImageTransparency = 0.5
+		display.Visible = false
+		display.Parent = playerDisplay
+	end
+
 	for _,v in pairs(game.Players:GetChildren()) do
 		if v.Name ~= plr.Name then
 			if v.Character then

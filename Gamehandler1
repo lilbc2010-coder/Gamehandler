@@ -2841,6 +2841,14 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 						char:SetPrimaryPartCFrame(CFrame.new(lastLocation.Value))
 						lastLocation:Destroy()
 						plrStatus[plr.Name] = "Playing"
+					else
+						-- Check if it's a friend teleport (player name)
+						local targetPlr = game.Players:FindFirstChild(location)
+						if targetPlr and targetPlr.Character and targetPlr.Character.PrimaryPart then
+							local targetPos = targetPlr.Character.PrimaryPart.CFrame
+							char:SetPrimaryPartCFrame(targetPos + Vector3.new(math.random(-3, 3), 0, math.random(-3, 3)))
+							plrStatus[plr.Name] = "Playing"
+						end
 					end
 				elseif typeof(location) == "Instance" and location.PrimaryPart then
 					char:SetPrimaryPartCFrame(teleportingIndex[plr.Name].PrimaryPart.CFrame + Vector3.new(0, 2, 0))

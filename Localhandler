@@ -132,6 +132,15 @@ particleContainer.Name = "UniversalContainer"
 particleContainer.Parent = work
 while not char:IsDescendantOf(work) do wait() end
 char:WaitForChild("CollisionPart").CanCollide = true
+
+-- Weapon Preview System Variables
+local weaponPreview = {
+	Model = nil,
+	Rotating = false,
+	LastMouseX = 0,
+	RotationY = 0,
+	GunPoint = nil
+}
 local weaponFolder = Instance.new("Folder")
 weaponFolder.Name = "WeaponFolder"
 weaponFolder.Parent = work
@@ -3666,6 +3675,84 @@ function SetupGameButtons()
 	end
 end
 
+function CreateGunPoint()
+	if not weaponPreview.GunPoint and customizationRoom then
+		local gunPoint = Instance.new("Part")
+		gunPoint.Name = "GunPoint"
+		gunPoint.Size = Vector3.new(1, 1, 1)
+		gunPoint.Transparency = 1
+		gunPoint.Anchored = true
+		gunPoint.CanCollide = false
+		-- Position it in front of the camera in the customization room
+		gunPoint.CFrame = customizationRoom.CamPart.CFrame * CFrame.new(0, -2, -5)
+		gunPoint.Parent = customizationRoom
+		weaponPreview.GunPoint = gunPoint
+	end
+end
+
+function DisplayWeaponPreview(baseName, variantName)
+	-- Clear any existing preview
+	ClearWeaponPreview()
+
+	-- Only show preview for Primary and Secondary weapons
+	local toolMode = toolFrame.ToolMode.Value
+	if toolMode ~= "Primary" and toolMode ~= "Secondary" then
+		return
+	end
+
+	-- Create GunPoint if it doesn't exist
+	CreateGunPoint()
+
+	if not weaponPreview.GunPoint then
+		return
+	end
+
+	-- Get the weapon model
+	local weaponFolder = rep.Tools:FindFirstChild(baseName)
+	if not weaponFolder then
+		return
+	end
+
+	local weaponVariant = weaponFolder:FindFirstChild(variantName)
+	if not weaponVariant then
+		return
+	end
+
+	-- Clone and display the weapon
+	local weaponClone = weaponVariant:Clone()
+	weaponClone.Parent = weaponPreview.GunPoint
+	weaponPreview.Model = weaponClone
+	weaponPreview.RotationY = 0
+
+	-- Position the weapon at GunPoint
+	if weaponClone.PrimaryPart then
+		weaponClone:SetPrimaryPartCFrame(weaponPreview.GunPoint.CFrame)
+	end
+end
+
+function ClearWeaponPreview()
+	if weaponPreview.Model then
+		weaponPreview.Model:Destroy()
+		weaponPreview.Model = nil
+	end
+	weaponPreview.RotationY = 0
+	weaponPreview.Rotating = false
+end
+
+function RotateWeaponPreview(deltaX)
+	if weaponPreview.Model and weaponPreview.Model.PrimaryPart then
+		-- Rotate based on mouse movement
+		local rotationAmount = deltaX * 0.01
+		weaponPreview.RotationY = weaponPreview.RotationY + rotationAmount
+
+		-- Apply rotation
+		local basePosition = weaponPreview.GunPoint.CFrame.Position
+		weaponPreview.Model:SetPrimaryPartCFrame(
+			CFrame.new(basePosition) * CFrame.Angles(0, weaponPreview.RotationY, 0)
+		)
+	end
+end
+
 function InitializeButton(v)
 	local index = #buttons + 1
 	buttons[index] = {v, v.Parent, {}}
@@ -4362,20 +4449,50 @@ function InitializeButton(v)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						-- Hide player and setup weapon preview
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								part.Transparency = 1
+							end
+						end
+						CreateGunPoint()
 					elseif mode.Value == "Shop" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						-- Hide player and setup weapon preview
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								part.Transparency = 1
+							end
+						end
+						CreateGunPoint()
 					elseif mode.Value == "Tools" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
+						-- Clear weapon preview
+						ClearWeaponPreview()
 					elseif mode.Value == "Data" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						-- Hide player and setup weapon preview
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								part.Transparency = 1
+							end
+						end
+						CreateGunPoint()
 					else
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						-- Hide player and setup weapon preview
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								part.Transparency = 1
+							end
+						end
+						CreateGunPoint()
 					end
 				elseif v.Parent.Name == "Shop" then
 					local mode = customizeFrame.Mode
@@ -4404,10 +4521,31 @@ function InitializeButton(v)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						-- Show player and clear weapon preview
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								if part.Name == "Head" or part.Parent.Name == "[ No name ]" then
+									part.Transparency = 1
+								else
+									part.Transparency = 0
+								end
+							end
+						end
+						ClearWeaponPreview()
 					elseif mode.Value == "Shop" then
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						-- Show player
+						for _,part in pairs(char:GetDescendants()) do
+							if part:IsA("BasePart") or part:IsA("MeshPart") then
+								if part.Name == "Head" or part.Parent.Name == "[ No name ]" then
+									part.Transparency = 1
+								else
+									part.Transparency = 0
+								end
+							end
+						end
 					elseif mode.Value == "Character" then
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
@@ -4457,6 +4595,8 @@ function InitializeButton(v)
 						currencyFrame:TweenPosition(UDim2.new(0.35, 0, 1.3, 0), "In", "Sine", moveTime)
 						tradeFrame:TweenPosition(UDim2.new(0.4, 0, 1.4, 0), "In", "Sine", moveTime)
 						customizeFrame.Mode.Value = "None"
+						-- Clear weapon preview when exiting customize mode
+						ClearWeaponPreview()
 						tsFrame.BackgroundTransparency = 1
 						tsFrame.Visible = true
 						tsFrame.TransitionPhase.Value = "In"
@@ -4522,6 +4662,11 @@ function InitializeButton(v)
 							AssignTool(v.NameTag.Text, v.Parent.Base.Value, toolboxFrame:FindFirstChild(toolFrame.ToolMode.Value))
 							notifierCount = 0
 							notifier.Visible = false
+
+							-- Display weapon preview if in customize mode and Tools tab
+							if plrState == "Customizing" and customizeFrame.Mode.Value == "Tools" then
+								DisplayWeaponPreview(v.Parent.Base.Value, v.NameTag.Text)
+							end
 						else
 							notifierCount = notifierCount + 1
 							notifier.Text = "UNAVAILABLE"
@@ -7379,6 +7524,26 @@ end)
 RunService.Heartbeat:Connect(function(step)
 	if char.PrimaryPart and char.PrimaryPart.Velocity.Magnitude > 500 then
 		char.PrimaryPart.Velocity = Vector3.new(0, 0, 0)
+	end
+end)
+
+-- Weapon Preview Rotation Handling
+mouse.Button1Down:Connect(function()
+	if weaponPreview.Model and plrState == "Customizing" and customizeFrame.Mode.Value == "Tools" then
+		weaponPreview.Rotating = true
+		weaponPreview.LastMouseX = mouse.X
+	end
+end)
+
+mouse.Button1Up:Connect(function()
+	weaponPreview.Rotating = false
+end)
+
+RunService.RenderStepped:Connect(function()
+	if weaponPreview.Rotating and weaponPreview.Model then
+		local deltaX = mouse.X - weaponPreview.LastMouseX
+		weaponPreview.LastMouseX = mouse.X
+		RotateWeaponPreview(deltaX)
 	end
 end)
 

@@ -1741,8 +1741,7 @@ function UserInput()
 		if not textBoxFocused then
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				leftMouseDown = true
-				-- Start customization drag if in customization menu
-				if customizationRoom and customizeFrame.Visible then
+				if customizationRoom then
 					customizationDrag.Active = true
 					customizationDrag.LastMousePos = Vector2.new(mouse.X, mouse.Y)
 				end

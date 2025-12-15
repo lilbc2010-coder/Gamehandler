@@ -7251,8 +7251,6 @@ function NonFirstEntryProcesses(t)
 end
 
 local lastFrameCheck = tick()
-local lastMouseCheck = tick()
-local mouseCheckInterval = 1/30 -- Check mouse 30 times per second instead of 60+
 local stepconnection
 stepconnection = RunService.RenderStepped:Connect(function()
 	local t = tick()
@@ -7283,10 +7281,7 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	end
 
 	local lastMouseState = mouseState
-	-- Throttle mouse raycasts to 30fps for better performance
-	local shouldCheckMouse = (t - lastMouseCheck) >= mouseCheckInterval
-	if platform == "Desktop" and shouldCheckMouse then
-		lastMouseCheck = t
+	if platform == "Desktop" then
 		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 		if mouseTarget then

@@ -4010,31 +4010,47 @@ function WorldCycle()
 	local cycleRunner
 	local lastTick = tick()
 	local testTick = lastTick
+
+	-- Separate loop for player time tracking (runs once per second instead of 60 times/sec)
+	spawn(function()
+		local lastPlayerUpdate = tick()
+		while true do
+			wait(1) -- Update once per second
+			local currentTime = tick()
+			local deltaTime = currentTime - lastPlayerUpdate
+			lastPlayerUpdate = currentTime
+
+			for plrName, entry in pairs(gameData) do
+				local charBio = rep.CharacterBios:FindFirstChild(plrName)
+				if charBio then
+					local timePlayed = entry["Account"]["TimePlayed"]
+					local beforeLevel = math.floor(timePlayed / 1800)
+					timePlayed = timePlayed + deltaTime
+					local afterLevel = math.floor(timePlayed / 1800)
+					gameData[plrName]["Account"]["TimePlayed"] = timePlayed
+					if afterLevel > beforeLevel then
+						charBio.Level.Value = afterLevel
+						local plr = game.Players:FindFirstChild(plrName)
+						if plr then
+							-- Save data outside physics loop
+							spawn(function()
+								SaveData(plr.UserId, gameData[plrName]["Account"], DataStore)
+								rep.ServerNotification:FireClient(plr, "You are now level "..afterLevel.."!", afterLevel)
+							end)
+						elseif gameData[plrName] then
+							gameData[plrName] = nil
+						end
+					end
+				end
+			end
+		end
+	end)
+
 	CoroutineLauncher("Radio")
 	cycleRunner = RunService.Stepped:Connect(function()
 		local t = tick()
 		local hour, minute, second = string.sub(light.TimeOfDay, 1, 2), string.sub(light.TimeOfDay, 4, 5), string.sub(light.TimeOfDay, 7, 8)
 		local timeSinceLastTick = (t - lastTick)
-		for plrName, entry in pairs(gameData) do
-			local charBio = rep.CharacterBios:FindFirstChild(plrName)
-			if charBio then
-				local timePlayed = entry["Account"]["TimePlayed"]
-				local beforeLevel = math.floor(timePlayed / 1800)
-				timePlayed = timePlayed + timeSinceLastTick
-				local afterLevel = math.floor(timePlayed / 1800)
-				gameData[plrName]["Account"]["TimePlayed"] = timePlayed
-				if afterLevel > beforeLevel then
-					charBio.Level.Value = afterLevel
-					local plr = game.Players:FindFirstChild(plrName)
-					if plr then
-						SaveData(plr.UserId, gameData[plrName]["Account"], DataStore)
-						rep.ServerNotification:FireClient(plr, "You are now level "..afterLevel.."!", afterLevel)
-					elseif gameData[plrName] then
-						gameData[plrName] = nil
-					end
-				end
-			end
-		end
 		timeSinceLastTick = timeSinceLastTick * timeSpeed
 		lastTick = t
 		second = second + timeSinceLastTick

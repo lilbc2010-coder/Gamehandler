@@ -731,6 +731,15 @@ function ClickAction()
 
 		-- Check if trying to place below Y = 0
 		if propCFrame.Position.Y < 0 then
+			if not buildingBlocked then
+				buildingBlocked = true
+				notifier.Text = "CAN'T BUILD"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+				wait(3)
+				buildingBlocked = false
+			end
 			return
 		end
 
@@ -753,6 +762,15 @@ function ClickAction()
 			end
 		end
 		if touchingPlayers then
+			if not buildingBlocked then
+				buildingBlocked = true
+				notifier.Text = "CAN'T BUILD"
+				notifier.Visible = true
+				notifierCount = notifierCount + 1
+				CoroutineLauncher("NotifierDelay")
+				wait(3)
+				buildingBlocked = false
+			end
 			return
 		end
 
@@ -769,7 +787,7 @@ function ClickAction()
 		if #propPlacementTimes >= 2 then
 			if not buildingBlocked then
 				buildingBlocked = true
-				notifier.Text = "SLOW DOWN"
+				notifier.Text = "BUILDING TOO FAST"
 				notifier.Visible = true
 				notifierCount = notifierCount + 1
 				CoroutineLauncher("NotifierDelay")
@@ -1126,6 +1144,15 @@ function ClickAction()
 
 					-- Check if trying to place below Y = 0
 					if propCFrame.Position.Y < 0 then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
 						return
 					end
 
@@ -1149,6 +1176,15 @@ function ClickAction()
 						end
 					end
 					if touchingPlayers then
+						if not buildingBlocked then
+							buildingBlocked = true
+							notifier.Text = "CAN'T BUILD"
+							notifier.Visible = true
+							notifierCount = notifierCount + 1
+							CoroutineLauncher("NotifierDelay")
+							wait(3)
+							buildingBlocked = false
+						end
 						return
 					end
 
@@ -7159,7 +7195,7 @@ function NonFirstEntryProcesses(t)
 		local c = string.sub(frame.Name, 1, 1)
 		local absPos, absSize = frame.AbsolutePosition.X, frame.AbsoluteSize.X - slider.AbsoluteSize.X
 		local p = math.min(math.max(mouse.X - sliderBase["Offset"], absPos), absPos + absSize) - absPos
-		frame.Parent:FindFirstChild("Set"..c.."Box").Text = tostring(math.max(math.min(math.floor(p * 2), 255), 0))
+		frame.Parent:FindFirstChild("Set"..c.."Box").Text = tostring(math.max(math.min(math.floor((p / absSize) * 255), 255), 0))
 		sliderBase["Dragging"].Parent.Setting.Value = p / absSize
 		slider.Position = UDim2.new(0, p, -0.25, 0)
 	end
@@ -7243,6 +7279,10 @@ stepconnection = RunService.RenderStepped:Connect(function()
 				end
 				mouseIcon.NameTag.Text = ""
 			elseif mouseTarget.Name == "OwnedProp" then
+				mouseState = "OwnedProp"
+				mouseIcon.NameTag.Text = ""
+			elseif propFrame.Visible and mouseTarget.Parent and mouseTarget.Parent:FindFirstChild("Owner") then
+				-- When prop placer is open, treat any part of a placed prop as OwnedProp
 				mouseState = "OwnedProp"
 				mouseIcon.NameTag.Text = ""
 			elseif isHumanoid then

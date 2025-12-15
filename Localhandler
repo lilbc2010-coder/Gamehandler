@@ -26,6 +26,7 @@ if plr.UserId > 0 then
 	rankInAB = plr:GetRankInGroup(groupId)
 end
 local ownsServer = false
+local hasStaffAccess = false -- Cache staff access check
 local humanSpeed = 0
 local mouseIcons = {Hovering = "79967493897869", None = "71188516246141", OwnedProp = "81023683177299", Player = "79967493897869"}
 local TNS1, TNS2 = 'http://www.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid=', '&fmt=png&wd=420&ht=420'
@@ -3183,6 +3184,11 @@ function SetupGameButtons()
 	table.sort(repTools)
 	for _,v in pairs(repTools) do
 		local v = rep.Tools:FindFirstChild(v)
+		-- Filter out StaffOnly weapons if player doesn't have access
+		local staffOnly = v:FindFirstChild("StaffOnly")
+		if staffOnly and staffOnly.Value == true and not hasStaffAccess then
+			continue -- Skip this weapon
+		end
 		local clo = GUI.ButtonTemplate:Clone()
 		clo.Button.NameTag.Text = v.Name
 		clo.Name = "ToolButton"
@@ -3203,6 +3209,11 @@ function SetupGameButtons()
 		local varY = 10
 		for _,n in pairs(v:GetChildren()) do
 			if n:IsA("BoolValue") and not (string.find(n.Name, "Setting") or string.find(n.Name, "Virtual")) then
+				-- Filter out StaffOnly variants if player doesn't have access
+				local variantStaffOnly = n:FindFirstChild("StaffOnly")
+				if variantStaffOnly and variantStaffOnly.Value == true and not hasStaffAccess then
+					continue -- Skip this variant
+				end
 				local variant = GUI.ButtonTemplate:Clone()
 				variant.Button.NameTag.Text = n.Name
 				variant.Name = "VariantButton"
@@ -3438,6 +3449,11 @@ function SetupGameButtons()
 	end
 	x, y = 0.025, 0.02
 	for _,item in pairs(rep.Vehicles:GetChildren()) do
+		-- Filter out StaffOnly vehicles if player doesn't have access
+		local staffOnly = item:FindFirstChild("StaffOnly")
+		if staffOnly and staffOnly.Value == true and not hasStaffAccess then
+			continue -- Skip this vehicle
+		end
 		local clo = vehicleFrame.ButtonTemplate:Clone()
 		clo.Button.NameTag.Text = item.Name
 		local pass = item:FindFirstChild("Pass")
@@ -3523,9 +3539,10 @@ function SetupGameButtons()
 		end
 	end
 
-	local toolList, morphList, currency, ownedProps, propCount, propLimit, expList, 
+	local toolList, morphList, currency, ownedProps, propCount, propLimit, expList,
 	buildSaveNames, charSaveNames, mountList, doesOwnServer = rep.OwnedItemsUpdate:InvokeServer()
-	ownsServer = doesOwnServer	
+	ownsServer = doesOwnServer
+	hasStaffAccess = (rankInAB >= 200 or ownsServer)
 	GUI.Wallet.Text = currencyName..": ".. tostring(currency)
 	GUI.Wallet.Amount.Value = currency
 	for _,v in pairs(toolFrame.VariantFrame.VariantScrollFrame:GetChildren()) do
@@ -4938,6 +4955,11 @@ function OrganizePropFrame(ownedProps)
 	local propsList = {}
 	local newButtons = {}
 	for _,v in pairs(rep.Props:GetChildren()) do
+		-- Filter out StaffOnly props if player doesn't have access
+		local staffOnly = v:FindFirstChild("StaffOnly")
+		if staffOnly and staffOnly.Value == true and not hasStaffAccess then
+			continue -- Skip this prop
+		end
 		local pass = v:FindFirstChild("Pass")
 		if pass and ownedProps[v.Name] then
 			propsList[#propsList + 1] = v.Name

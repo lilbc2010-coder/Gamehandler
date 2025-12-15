@@ -6852,9 +6852,18 @@ function NonFirstEntryProcesses(t)
 
 			-- Handle click-drag to rotate player model (horizontal only)
 			if customizationDrag.Active and customizationDrag.LastMousePos and char.PrimaryPart then
-				-- Don't rotate if hovering over UI
+				-- Don't rotate if hovering over visible, active UI elements
 				local mouseOverUI = plr.PlayerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y)
-				if #mouseOverUI == 0 then
+				local overActiveUI = false
+				for _, guiObj in pairs(mouseOverUI) do
+					-- Only block if it's a visible GUI element (ignore ScreenGui containers)
+					if guiObj.Visible and not guiObj:IsA("ScreenGui") and not guiObj:IsA("LayerCollector") then
+						overActiveUI = true
+						break
+					end
+				end
+
+				if not overActiveUI then
 					local currentMousePos = Vector2.new(mouse.X, mouse.Y)
 					local delta = currentMousePos - customizationDrag.LastMousePos
 

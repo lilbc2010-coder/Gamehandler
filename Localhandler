@@ -3014,7 +3014,7 @@ function SetupGameButtons()
 		propFrame.TuningFrame.ResetTranslationButton.Button, GUI.ClearPropsFrame.Confirm.Button,
 		GUI.ClearOccludedFrame.Confirm.Button,
 		GUI.ClearOccludedFrame.Deny.Button, customizeFrame.NameClear.Button, customizeFrame.BioClear.Button,
-		gameFrame.SpawnFrame.Button,
+		gameFrame.LobbyFrame.Button,
 		txtFrame.ToggleTextScale.Button, txtFrame.ToggleTextStroke.Button, txtFrame.ConfirmTextBox.Button,
 		txtFrame.ConfirmRGB.Button, txtFrame.ConfirmTextSize.Button, txtFrame.ClearTextBox.Button, txtFrame.Exit.Button,
 		txtFrame.TextXAlignLeft.Button, txtFrame.TextXAlignCenter.Button, txtFrame.TextXAlignRight.Button, 
@@ -3873,7 +3873,7 @@ function InitializeButton(v)
 						end
 					end
 					rep.RollD20:FireServer(dicePart)
-				elseif v.Parent.Name == "SpawnFrame" then
+				elseif v.Parent.Name == "LobbyFrame" then
 					-- Trigger teleport UI to teleport to lobby
 					if not tpFrame.Ready.Value then
 						tpFrame.Ready.Value = true

@@ -27,7 +27,7 @@ if plr.UserId > 0 then
 end
 local ownsServer = false
 local humanSpeed = 0
-local mouseIcons = {Hovering = "79967493897869", None = "71188516246141", OwnedProp = "81023683177299"}
+local mouseIcons = {Hovering = "79967493897869", None = "71188516246141", OwnedProp = "81023683177299", Player = "79967493897869"}
 local TNS1, TNS2 = 'http://www.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid=', '&fmt=png&wd=420&ht=420'
 mouseIcon.Image = TNS1..mouseIcons["None"]..TNS2
 local cam = game.Workspace.Camera
@@ -60,6 +60,7 @@ local propOriginalPositions = {}
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
 local customizationRoom
+local customizationDrag = {Active = false, LastMousePos = nil, RotationX = 0, RotationY = 0}
 local dragProp = {}
 local gameFrame = GUI.GameFrame
 local toolboxFrame = GUI.ToolboxFrame
@@ -730,15 +731,6 @@ function ClickAction()
 
 		-- Check if trying to place below Y = 0
 		if propCFrame.Position.Y < 0 then
-			if not buildingBlocked then
-				buildingBlocked = true
-				notifier.Text = "CAN'T BUILD"
-				notifier.Visible = true
-				notifierCount = notifierCount + 1
-				CoroutineLauncher("NotifierDelay")
-				wait(3)
-				buildingBlocked = false
-			end
 			return
 		end
 
@@ -761,15 +753,6 @@ function ClickAction()
 			end
 		end
 		if touchingPlayers then
-			if not buildingBlocked then
-				buildingBlocked = true
-				notifier.Text = "CAN'T BUILD"
-				notifier.Visible = true
-				notifierCount = notifierCount + 1
-				CoroutineLauncher("NotifierDelay")
-				wait(3)
-				buildingBlocked = false
-			end
 			return
 		end
 
@@ -1143,15 +1126,6 @@ function ClickAction()
 
 					-- Check if trying to place below Y = 0
 					if propCFrame.Position.Y < 0 then
-						if not buildingBlocked then
-							buildingBlocked = true
-							notifier.Text = "CAN'T BUILD"
-							notifier.Visible = true
-							notifierCount = notifierCount + 1
-							CoroutineLauncher("NotifierDelay")
-							wait(3)
-							buildingBlocked = false
-						end
 						return
 					end
 
@@ -1175,15 +1149,6 @@ function ClickAction()
 						end
 					end
 					if touchingPlayers then
-						if not buildingBlocked then
-							buildingBlocked = true
-							notifier.Text = "CAN'T BUILD"
-							notifier.Visible = true
-							notifierCount = notifierCount + 1
-							CoroutineLauncher("NotifierDelay")
-							wait(3)
-							buildingBlocked = false
-						end
 						return
 					end
 
@@ -1750,6 +1715,11 @@ function UserInput()
 		if not textBoxFocused then
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				leftMouseDown = true
+				-- Start customization drag if in customization menu
+				if customizationRoom and customizeFrame.Visible then
+					customizationDrag.Active = true
+					customizationDrag.LastMousePos = Vector2.new(mouse.X, mouse.Y)
+				end
 				if not gameProcessedEvent then
 					ClickAction()
 				end
@@ -2031,6 +2001,11 @@ function UserInput()
 			keyCode = string.sub(keyCode, 14, string.len(keyCode))
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				leftMouseDown = false
+				-- Stop customization drag (but keep rotation values)
+				if customizationDrag.Active then
+					customizationDrag.Active = false
+					customizationDrag.LastMousePos = nil
+				end
 			elseif interactionKeys[keyCode] then
 				mKs[keyCode] = false
 				if not humanStates["resting"] then
@@ -3779,9 +3754,14 @@ function InitializeButton(v)
 					plrFrame.Visible = false
 					characterBioName = nil
 					customizationRoom = rep.CustomizationRoom:Clone()
-					customizationRoom:SetPrimaryPartCFrame(CFrame.new(math.random(-250, 250), -150, math.random(50, 350)) * 
+					customizationRoom:SetPrimaryPartCFrame(CFrame.new(math.random(-250, 250), -150, math.random(50, 350)) *
 						CFrame.Angles(math.rad(-90), 0, 0))
 					customizationRoom.CamPart.Origin.Value = customizationRoom.CamPart.CFrame
+					-- Reset customization drag rotation
+					customizationDrag.RotationX = 0
+					customizationDrag.RotationY = 0
+					customizationDrag.Active = false
+					customizationDrag.LastMousePos = nil
 					customizationRoom.Parent = work
 					rep.Teleport:InvokeServer("Transitioning_Customize", customizationRoom.CharacterPosition.CFrame)
 					while cam.CameraType == Enum.CameraType.Custom do
@@ -4973,13 +4953,21 @@ end
 
 function FilterPropList(searchText)
 	-- Filter and reorder prop list based on search text
-	local searchLower = string.lower(searchText)
+	-- Trim whitespace and treat empty/whitespace-only as cleared
+	local trimmedText = string.match(searchText, "^%s*(.-)%s*$") or ""
+	if trimmedText == "" and searchText ~= "" then
+		-- User has only whitespace, clear the search box
+		propFrame.SearchBox.Text = ""
+		return
+	end
+
+	local searchLower = string.lower(trimmedText)
 	local yAdd = 60
 	if platform == "Mobile" then
 		yAdd = 45
 	end
 
-	if searchText == "" then
+	if trimmedText == "" then
 		-- Restore original positions when search is cleared
 		for button, originalPos in pairs(propOriginalPositions) do
 			if button and button.Parent then
@@ -6781,9 +6769,25 @@ function NonFirstEntryProcesses(t)
 				cam.CameraType = Enum.CameraType.Scriptable
 				cam.FieldOfView = 40
 			end
-			local origin, c = customizationRoom.CamPart.Origin.Value, customizationRoom.CamPart.cValue
-			c.Value = c.Value + 0.01
-			cam.CFrame = origin * CFrame.Angles(math.rad(math.noise(c.Value, 0.014, 1.718)), math.rad(math.noise(0.197, c.Value, 1.718)), 0)
+
+			-- Handle click-drag camera rotation
+			if customizationDrag.Active and customizationDrag.LastMousePos then
+				local currentMousePos = Vector2.new(mouse.X, mouse.Y)
+				local delta = currentMousePos - customizationDrag.LastMousePos
+
+				-- Update rotation based on drag (inverted Y for natural feel)
+				customizationDrag.RotationY = customizationDrag.RotationY + delta.X * 0.005
+				customizationDrag.RotationX = customizationDrag.RotationX - delta.Y * 0.005
+
+				-- Clamp vertical rotation to prevent flipping
+				customizationDrag.RotationX = math.clamp(customizationDrag.RotationX, -math.pi/3, math.pi/3)
+
+				customizationDrag.LastMousePos = currentMousePos
+			end
+
+			-- Apply rotation to camera (rotation persists after drag ends)
+			local origin = customizationRoom.CamPart.Origin.Value
+			cam.CFrame = origin * CFrame.Angles(customizationDrag.RotationX, customizationDrag.RotationY, 0)
 		end
 	end
 
@@ -7231,15 +7235,20 @@ stepconnection = RunService.RenderStepped:Connect(function()
 			end
 
 			if mouseTarget.Name == "Click" then
-				mouseState = "Hovering"
+				-- When prop placer is open, treat Click parts as OwnedProp (no cursor change)
+				if propFrame.Visible then
+					mouseState = "OwnedProp"
+				else
+					mouseState = "Hovering"
+				end
 				mouseIcon.NameTag.Text = ""
 			elseif mouseTarget.Name == "OwnedProp" then
 				mouseState = "OwnedProp"
 				mouseIcon.NameTag.Text = ""
 			elseif isHumanoid then
-				mouseState = "Hovering"
+				mouseState = "Player"
 				mouseIcon.NameTag.Text = isHumanoid.Name
-			elseif (mouseState == "Hovering" or mouseState == "OwnedProp") and not (mouseTarget.Name == "OwnedProp" or
+			elseif (mouseState == "Hovering" or mouseState == "OwnedProp" or mouseState == "Player") and not (mouseTarget.Name == "OwnedProp" or
 				mouseTarget.Name == "Click" or isHumanoid or isOccludableModel) then
 				mouseState = "None"
 				mouseIcon.NameTag.Text = ""

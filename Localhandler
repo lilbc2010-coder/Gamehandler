@@ -56,6 +56,8 @@ local occludedModels = {}
 local occluderHighlight = nil
 local mat = Enum.Material
 local occluderHighlights = {}
+local occluderHighlightsNeedRebuild = false
+local lastOccluderMode = nil
 local propOriginalPositions = {}
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
@@ -552,6 +554,7 @@ function ClickAction()
 
 				-- Add to occluded models list with stored properties
 				table.insert(occludedModels, {Model = model, PartData = partData})
+				occluderHighlightsNeedRebuild = true
 
 				-- Take up 1 prop slot
 				local countLabel = propFrame.CountLabel
@@ -596,6 +599,7 @@ function ClickAction()
 
 						-- Remove from occluded models list
 						table.remove(occludedModels, i)
+						occluderHighlightsNeedRebuild = true
 
 						-- Free up 1 prop slot
 						local countLabel = propFrame.CountLabel
@@ -2907,6 +2911,7 @@ function SaveFile(v)
 									end
 								end
 								table.insert(occludedModels, {Model = current, PartData = partData})
+								occluderHighlightsNeedRebuild = true
 								-- Increment prop count for occluded model
 								propFrame.CountLabel.Count.Value = propFrame.CountLabel.Count.Value + 1
 								propFrame.CountLabel.Text = tostring(propFrame.CountLabel.Count.Value) .."/".. tostring(rep.PropLimit.Value)
@@ -2949,6 +2954,7 @@ function RestoreAllOccludedModels()
 		end
 	end
 	occludedModels = {}
+	occluderHighlightsNeedRebuild = true
 	-- Decrement prop count for restored occluded models
 	if restoredCount > 0 then
 		local countLabel = propFrame.CountLabel
@@ -7202,13 +7208,18 @@ function NonFirstEntryProcesses(t)
 end
 
 local lastFrameCheck = tick()
+local lastMouseCheck = tick()
+local mouseCheckInterval = 1/30 -- Check mouse 30 times per second instead of 60+
 local stepconnection
 stepconnection = RunService.RenderStepped:Connect(function()
 	local t = tick()
 	frames = frames + 1
 	if (t - lastFrameCheck) >= 1 then
 		if not humanStates["moving"] and char.PrimaryPart then
-			for _,v in pairs(char.PrimaryPart:GetChildren()) do
+			-- Cache GetChildren result
+			local primaryChildren = char.PrimaryPart:GetChildren()
+			for i = 1, #primaryChildren do
+				local v = primaryChildren[i]
 				if v:IsA("Sound") and string.find(v.Name, "Move") and v.IsPlaying then
 					rep.CharacterSound:FireServer(p, floorMaterialSounds[currentFloorMaterial], 0, false)
 				end
@@ -7229,7 +7240,10 @@ stepconnection = RunService.RenderStepped:Connect(function()
 	end
 
 	local lastMouseState = mouseState
-	if platform == "Desktop" then
+	-- Throttle mouse raycasts to 30fps for better performance
+	local shouldCheckMouse = (t - lastMouseCheck) >= mouseCheckInterval
+	if platform == "Desktop" and shouldCheckMouse then
+		lastMouseCheck = t
 		local ray = Ray.new(cam.CFrame.p, (mouse.Hit.p - cam.CFrame.p).unit * 100)
 		mouseTarget, mouseHit, mouseNormal = work:FindPartOnRayWithIgnoreList(ray, ignoreList)
 		if mouseTarget then
@@ -7361,16 +7375,19 @@ stepconnection = RunService.RenderStepped:Connect(function()
 		occluderHighlight = nil
 	end
 
-	-- Multiple highlights for ALL occluded models in Delete Mode
-	if occluderMode and propFrame.Visible then
-		local currentMode = propFrame.ModeButton.Button.Mode.Value
-		if currentMode == "Delete" then
-			-- Remove old highlights
-			for _, highlight in ipairs(occluderHighlights) do
-				highlight:Destroy()
-			end
-			occluderHighlights = {}
+	-- Multiple highlights for ALL occluded models in Delete Mode (optimized)
+	local currentMode = propFrame.Visible and propFrame.ModeButton.Button.Mode.Value or nil
+	local shouldShowHighlights = occluderMode and propFrame.Visible and currentMode == "Delete"
 
+	-- Only rebuild highlights when mode changes or rebuild is flagged
+	if shouldShowHighlights ~= lastOccluderMode or occluderHighlightsNeedRebuild then
+		-- Clean up old highlights
+		for _, highlight in ipairs(occluderHighlights) do
+			highlight:Destroy()
+		end
+		occluderHighlights = {}
+
+		if shouldShowHighlights then
 			-- Create highlights for all occluded models using template
 			local highlightTemplate = plr.PlayerGui:FindFirstChild("Highlights")
 			if highlightTemplate then
@@ -7384,21 +7401,10 @@ stepconnection = RunService.RenderStepped:Connect(function()
 					end
 				end
 			end
-		else
-			-- Not in Delete Mode, remove all multiple highlights
-			if #occluderHighlights > 0 then
-				for _, highlight in ipairs(occluderHighlights) do
-					highlight:Destroy()
-				end
-				occluderHighlights = {}
-			end
 		end
-	elseif #occluderHighlights > 0 then
-		-- Occluder mode is off, remove all multiple highlights
-		for _, highlight in ipairs(occluderHighlights) do
-			highlight:Destroy()
-		end
-		occluderHighlights = {}
+
+		lastOccluderMode = shouldShowHighlights
+		occluderHighlightsNeedRebuild = false
 	end
 
 	if dragProp["Mode"] and mouseTarget then

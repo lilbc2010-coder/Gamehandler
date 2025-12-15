@@ -2067,7 +2067,6 @@ function LoadItem(plr, interaction, input1, input2, input3)
 				item.Handle.SpecialMesh.Name = "Mesh"
 			end
 
-			-- Allow duplicates with numbered names (e.g., "Hat (2)", "Hat (3)")
 			local baseName = item.Name
 			local existingCount = 0
 			for _,n in pairs(char:GetChildren()) do
@@ -2088,7 +2087,6 @@ function LoadItem(plr, interaction, input1, input2, input3)
 			originalId.Value = input1
 			originalId.Parent = newAccessory.Handle.Mesh
 
-			-- Create unique key for duplicates (e.g., "id123_1", "id123_2")
 			local saveKey = "id"..input1
 			local keyCount = 1
 			while gameData[plr.Name]["Server"]["Accessories"][saveKey.."_"..keyCount] do
@@ -2104,7 +2102,6 @@ function LoadItem(plr, interaction, input1, input2, input3)
 		elseif interaction == "RemoveAccessory" then
 			for _,v in pairs(char:GetChildren()) do
 				if v:IsA("Accessory") and v == input1 then
-					-- Find and remove the correct entry from gameData (handles duplicates)
 					for key, data in pairs(gameData[plr.Name]["Server"]["Accessories"]) do
 						if data.Object == v then
 							gameData[plr.Name]["Server"]["Accessories"][key] = nil
@@ -2817,10 +2814,9 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 			if location then
 				if typeof(location) == "string" then
 					if location == "Lobby" then
-						-- Teleport to a random spawn location
 						local spawnLocation = work:FindFirstChild("SpawnLocation"..tostring(math.random(1, 3)))
 						if spawnLocation then
-							char:SetPrimaryPartCFrame(spawnLocation.CFrame * CFrame.new(math.random(-5, 5), 4, math.random(-5, 5)))
+							char:SetPrimaryPartCFrame(spawnLocation.CFrame)
 							plrStatus[plr.Name] = "Playing"
 						end
 					elseif teleporterIndex[location] then
@@ -2843,11 +2839,9 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 					char.HumanoidRootPart.Anchored = false
 					char.Humanoid.WalkSpeed = 8
 				elseif typeof(location) == "table" and location.Type == "FriendTeleport" then
-					-- Friend teleport - simple position change with offset
 					local offset = Vector3.new(3, 0, 0)
 					char:SetPrimaryPartCFrame(location.Position + offset)
 					plrStatus[plr.Name] = "Playing"
-					print("[Friend Teleport] " .. plr.Name .. " arrived at friend's location")
 				elseif typeof(location) == "CFrame" then
 					char.Archivable = true
 					local falseChar = char:Clone()
@@ -2908,22 +2902,17 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 				end)
 
 				if success and friendPosition then
-					-- Store as a table to distinguish from customizing mode CFrame
 					teleportingIndex[plr.Name] = {
 						Type = "FriendTeleport",
 						Position = friendPosition
 					}
-					print("[Friend Teleport] " .. plr.Name .. " teleporting to " .. friendName .. "'s captured location")
 				else
-					print("[Friend Teleport] ERROR: Could not parse CFrame from setting")
 					teleportingIndex[plr.Name] = nil
 				end
 			else
-				print("[Friend Teleport] ERROR: Invalid setting format (missing separator)")
 				teleportingIndex[plr.Name] = nil
 			end
 		elseif category == "Lobby" then
-			-- Lobby teleport - select a random spawn location and store it as "Lobby" for lookup
 			teleportingIndex[plr.Name] = "Lobby"
 		elseif category ~= "Map" then
 			teleportingIndex[plr.Name] = setting
@@ -3245,7 +3234,6 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 				LoadItem(plr, "RemoveAccessory", v)
 			end
 			for i,v in pairs(loadout["Accessories"]) do
-				-- Extract accessory ID (handles both "id123" and "id123_1" format)
 				local accessoryId = string.match(i, "id(%d+)")
 				if accessoryId then
 					local newAccessory = LoadItem(plr, "AddAccessory", tonumber(accessoryId))
@@ -4207,7 +4195,6 @@ end
 
 -----------------------------------------------------------------------------INTERACTIVES
 
--- Smooth easing function for interactive objects (eliminates stuttering)
 local function EaseInOutSine(t)
 	return -(math.cos(math.pi * t) - 1) / 2
 end

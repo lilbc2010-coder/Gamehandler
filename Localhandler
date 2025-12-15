@@ -351,7 +351,6 @@ end
 
 function InteractiveAction()
 	local interacted = false
-	print("[Friend Teleport Debug] InteractiveAction called, mouseTarget: " .. tostring(mouseTarget and mouseTarget.Name or "nil"))
 	if mouseTarget.Name == "Click" and not mouseCooldown and not mouseTarget.Parent.Debounce.Value and not propFrame.Visible then
 		interacted, mouseCooldown = true, true
 		local tp = mouseTarget.Parent:FindFirstChild("Type")
@@ -381,41 +380,27 @@ function InteractiveAction()
 		local foreignPlr = game.Players:GetPlayerFromCharacter(foreignChar)
 		local foreignPlrId = game.Players:GetUserIdFromNameAsync(foreignPlr.Name)
 
-		print("[Friend Teleport Debug] Clicked on player: " .. foreignPlr.Name)
-		print("[Friend Teleport Debug] Metavision On: " .. tostring(gameFrame.MetaFrame.On.Value))
-		print("[Friend Teleport Debug] Is Friend: " .. tostring(plr:IsFriendsWith(foreignPlrId)))
-
-		-- Check if metavision is on and player is a friend - show teleport prompt
 		if gameFrame.MetaFrame.On.Value and plr:IsFriendsWith(foreignPlrId) then
-			print("[Friend Teleport Debug] Conditions met! Showing teleport frame")
-			-- Capture the friend's position NOW (not when they confirm)
 			local friendPosition = foreignChar.PrimaryPart.CFrame
 
 			if not tpFrame.Ready.Value then
 				tpFrame.Ready.Value = true
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
-					-- Store the friend's name and position as a serialized string
 					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
 				end
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
-				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name)
 			else
-				print("[Friend Teleport Debug] tpFrame.Ready.Value is already true, forcing reset")
-				-- Force reset if stuck
 				tpFrame.Ready.Value = false
 				wait()
-				-- Retry
 				tpFrame.Ready.Value = true
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
-					-- Store the friend's name and position as a serialized string
 					friendTravelValue.Value = foreignPlr.Name .. "|" .. tostring(friendPosition)
 				end
 				tpFrame.Label.Text = "Travel to " .. foreignPlr.Name .. "?"
 				tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
-				print("[Friend Teleport] Showing teleport prompt for " .. foreignPlr.Name .. " (after reset)")
 			end
 			return interacted
 		end
@@ -2609,18 +2594,15 @@ function TpFrameButtons()
 				tsFrame.BackgroundTransparency = 1
 				tsFrame.Visible = true
 				tsFrame.TransitionPhase.Value = "In"
-				-- Check if this is a lobby teleport
 				local lobbyTravelValue = tpFrame:FindFirstChild("LobbyTravel")
 				if lobbyTravelValue and lobbyTravelValue.Value == true then
 					rep.Teleport:InvokeServer("Transitioning_Lobby")
-					lobbyTravelValue.Value = false -- Clear the value after use
+					lobbyTravelValue.Value = false
 				else
-					-- Check if this is a friend teleport
 					local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 					if friendTravelValue and friendTravelValue.Value ~= "" then
 						rep.Teleport:InvokeServer("Transitioning_Friend", friendTravelValue.Value)
-						print("[Friend Teleport] Initiating teleport to " .. friendTravelValue.Value)
-						friendTravelValue.Value = "" -- Clear the value after use
+						friendTravelValue.Value = ""
 					else
 						rep.Teleport:InvokeServer("Transitioning_Map")
 					end
@@ -2629,11 +2611,11 @@ function TpFrameButtons()
 				rep.Teleport:InvokeServer("Cancel")
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
-					friendTravelValue.Value = "" -- Clear friend travel on cancel
+					friendTravelValue.Value = ""
 				end
 				local lobbyTravelValue = tpFrame:FindFirstChild("LobbyTravel")
 				if lobbyTravelValue then
-					lobbyTravelValue.Value = false -- Clear lobby travel on cancel
+					lobbyTravelValue.Value = false
 				end
 			end
 			tpFrame.Ready.Value = false
@@ -2661,13 +2643,10 @@ if not tpFrame:FindFirstChild("FriendTravel") then
 	friendTravel.Name = "FriendTravel"
 	friendTravel.Value = ""
 	friendTravel.Parent = tpFrame
-	print("[Friend Teleport] Created FriendTravel StringValue in TeleportFrame")
 end
 
--- Initialize Ready value to false (idle state)
 if tpFrame:FindFirstChild("Ready") then
 	tpFrame.Ready.Value = false
-	print("[Friend Teleport] Reset tpFrame.Ready.Value to false")
 end
 
 TpFrameButtons()
@@ -3874,11 +3853,9 @@ function InitializeButton(v)
 					end
 					rep.RollD20:FireServer(dicePart)
 				elseif v.Parent.Name == "LobbyFrame" then
-					-- Trigger teleport UI to teleport to lobby
 					if not tpFrame.Ready.Value then
 						tpFrame.Ready.Value = true
 						tpFrame.Label.Text = "Travel to Lobby?"
-						-- Create a flag to indicate this is a lobby teleport
 						local lobbyTravel = tpFrame:FindFirstChild("LobbyTravel")
 						if not lobbyTravel then
 							lobbyTravel = Instance.new("BoolValue")
@@ -5471,8 +5448,6 @@ function ApplyTestHighlight(characterModel, isFriend)
 	newHighlight.Adornee = characterModel
 	newHighlight.Enabled = gameFrame.MetaFrame.On.Value
 	newHighlight.Parent = characterModel
-
-	print("Applied " .. (isFriend and "Friend" or "Stranger") .. " Highlight to " .. characterModel.Name)
 end
 _G.ApplyTestHighlight = ApplyTestHighlight
 
@@ -6850,7 +6825,6 @@ function NonFirstEntryProcesses(t)
 				rep.Teleport:InvokeServer("Teleporting")
 				tsFrame.TransitionPhase.Value = "Out"
 				if plrState == "Playing" and cam.CameraType == Enum.CameraType.Scriptable then
-					-- Reset player rotation when exiting customization
 					if char.PrimaryPart and customizationDrag.CharacterRotation ~= 0 then
 						char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, -customizationDrag.CharacterRotation, 0))
 					end
@@ -6877,13 +6851,10 @@ function NonFirstEntryProcesses(t)
 				cam.FieldOfView = 40
 			end
 
-			-- Handle click-drag to rotate player model (horizontal only)
 			if customizationDrag.Active and customizationDrag.LastMousePos and char.PrimaryPart then
-				-- Don't rotate if hovering over visible, active UI elements
 				local mouseOverUI = plr.PlayerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y)
 				local overActiveUI = false
 				for _, guiObj in pairs(mouseOverUI) do
-					-- Only block if it's a visible GUI element (ignore ScreenGui containers)
 					if guiObj.Visible and not guiObj:IsA("ScreenGui") and not guiObj:IsA("LayerCollector") then
 						overActiveUI = true
 						break
@@ -6894,11 +6865,9 @@ function NonFirstEntryProcesses(t)
 					local currentMousePos = Vector2.new(mouse.X, mouse.Y)
 					local delta = currentMousePos - customizationDrag.LastMousePos
 
-					-- Update rotation based on horizontal drag only
 					local rotationDelta = delta.X * 0.01
 					customizationDrag.CharacterRotation = customizationDrag.CharacterRotation + rotationDelta
 
-					-- Apply rotation to character
 					char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, rotationDelta, 0))
 
 					customizationDrag.LastMousePos = currentMousePos

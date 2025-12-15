@@ -3275,6 +3275,11 @@ function SetupGameButtons()
 	table.sort(repMorphs)
 	for _,morph in pairs(repMorphs) do
 		local morph = rep.Morphs:FindFirstChild(morph)
+		-- Filter out StaffOnly morphs if player doesn't have access
+		local staffOnly = morph:FindFirstChild("StaffOnly")
+		if staffOnly and staffOnly.Value == true and not hasStaffAccess then
+			continue -- Skip this morph
+		end
 		for category,contents in pairs(categories) do
 			if category == "Preset" or morph:FindFirstChild(category) then
 				if (morph.Value ~= "Humanoid" and category == "Preset") or morph.Value == "Humanoid" then
@@ -3341,6 +3346,11 @@ function SetupGameButtons()
 		end
 	end
 	for _,v in pairs(rep.Morphs:GetChildren()) do
+		-- Filter out StaffOnly morphs from shop if player doesn't have access
+		local staffOnly = v:FindFirstChild("StaffOnly")
+		if staffOnly and staffOnly.Value == true and not hasStaffAccess then
+			continue -- Skip this morph in shop
+		end
 		local pass = v:FindFirstChild("Pass")
 		if pass and pass.Value == "forSale" then
 			local clo = shopFrame.ShopButtonTemplate:Clone()

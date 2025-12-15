@@ -4171,6 +4171,11 @@ end
 
 -----------------------------------------------------------------------------INTERACTIVES
 
+-- Smooth easing function for interactive objects (eliminates stuttering)
+local function EaseInOutSine(t)
+	return -(math.cos(math.pi * t) - 1) / 2
+end
+
 function InteractDoor(door, rotationMode)
 	local rotation = -1
 	local goalCF = door.GoalCF.Value
@@ -4198,13 +4203,15 @@ function InteractDoor(door, rotationMode)
 	end
 	objectRunner = RunService.Stepped:connect(function()
 		if door.Parent then
-			local interval = math.min(((tick() - startT) / 0.5) * 90, 90)
+			local rawProgress = math.min((tick() - startT) / 0.5, 1)
+			local easedProgress = EaseInOutSine(rawProgress)
+			local interval = easedProgress * 90
 			door:SetPrimaryPartCFrame(startCF * CFrame.Angles(0, math.rad(interval * rotation), 0))
 			if not soundPlayed and interval >= 20 then
 				CoroutineLauncher("PlaySound", door.PrimaryPart, "InteractiveSounds", "DoorClose", 1, {95, 105})
 				soundPlayed = true
 			end
-			if interval == 90 then
+			if rawProgress >= 1 then
 				door:SetPrimaryPartCFrame(goalCF)
 				objectRunner:disconnect()
 				wait(0.4)
@@ -4594,9 +4601,10 @@ function InteractDrawer(button)
 	local objectRunner
 	objectRunner = RunService.Stepped:connect(function()
 		if drawer.Parent then
-			local interval = math.min((tick() - startT) / 0.4, 1)
-			drawer:SetPrimaryPartCFrame(startCF:lerp(goalCF, interval))
-			if interval == 1 then
+			local rawProgress = math.min((tick() - startT) / 0.4, 1)
+			local easedProgress = EaseInOutSine(rawProgress)
+			drawer:SetPrimaryPartCFrame(startCF:lerp(goalCF, easedProgress))
+			if rawProgress >= 1 then
 				objectRunner:Disconnect()
 				wait(0.2)
 				drawer.Debounce.Value = false

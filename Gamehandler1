@@ -2066,15 +2066,19 @@ function LoadItem(plr, interaction, input1, input2, input3)
 			if not item.Handle:FindFirstChild("Mesh") then
 				item.Handle.SpecialMesh.Name = "Mesh"
 			end
-			for _,v in pairs(newAccessory:GetChildren()) do
-				for _,n in pairs(char:GetChildren()) do
-					if n:IsA("Accessory") and n.Handle.Mesh.MeshId == v.Handle.Mesh.MeshId then
-						newAccessory:Destroy()
-						return false
-					end
+
+			-- Allow duplicates with numbered names (e.g., "Hat (2)", "Hat (3)")
+			local baseName = item.Name
+			local existingCount = 0
+			for _,n in pairs(char:GetChildren()) do
+				if n:IsA("Accessory") and n.Handle.Mesh.MeshId == item.Handle.Mesh.MeshId then
+					existingCount = existingCount + 1
 				end
-				break
 			end
+			if existingCount > 0 then
+				item.Name = baseName .. " (" .. (existingCount + 1) .. ")"
+			end
+
 			item.Parent = serv
 			newAccessory:Destroy()
 			newAccessory = item
@@ -2083,13 +2087,30 @@ function LoadItem(plr, interaction, input1, input2, input3)
 			originalId.Name = "OriginalId"
 			originalId.Value = input1
 			originalId.Parent = newAccessory.Handle.Mesh
-			gameData[plr.Name]["Server"]["Accessories"]["id"..input1] = {Name = newAccessory.Name, Object = newAccessory}
+
+			-- Create unique key for duplicates (e.g., "id123_1", "id123_2")
+			local saveKey = "id"..input1
+			local keyCount = 1
+			while gameData[plr.Name]["Server"]["Accessories"][saveKey.."_"..keyCount] do
+				keyCount = keyCount + 1
+			end
+			if keyCount > 1 or gameData[plr.Name]["Server"]["Accessories"][saveKey] then
+				saveKey = saveKey.."_"..keyCount
+			end
+
+			gameData[plr.Name]["Server"]["Accessories"][saveKey] = {Name = newAccessory.Name, Object = newAccessory}
 			char.Humanoid:AddAccessory(newAccessory)
 			return newAccessory
 		elseif interaction == "RemoveAccessory" then
 			for _,v in pairs(char:GetChildren()) do
 				if v:IsA("Accessory") and v == input1 then
-					gameData[plr.Name]["Server"]["Accessories"]["id"..v.Handle.Mesh.OriginalId.Value] = nil
+					-- Find and remove the correct entry from gameData (handles duplicates)
+					for key, data in pairs(gameData[plr.Name]["Server"]["Accessories"]) do
+						if data.Object == v then
+							gameData[plr.Name]["Server"]["Accessories"][key] = nil
+							break
+						end
+					end
 					v:Destroy()
 					return true
 				end

@@ -2609,20 +2609,31 @@ function TpFrameButtons()
 				tsFrame.BackgroundTransparency = 1
 				tsFrame.Visible = true
 				tsFrame.TransitionPhase.Value = "In"
-				-- Check if this is a friend teleport
-				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
-				if friendTravelValue and friendTravelValue.Value ~= "" then
-					rep.Teleport:InvokeServer("Transitioning_Friend", friendTravelValue.Value)
-					print("[Friend Teleport] Initiating teleport to " .. friendTravelValue.Value)
-					friendTravelValue.Value = "" -- Clear the value after use
+				-- Check if this is a lobby teleport
+				local lobbyTravelValue = tpFrame:FindFirstChild("LobbyTravel")
+				if lobbyTravelValue and lobbyTravelValue.Value == true then
+					rep.Teleport:InvokeServer("Transitioning_Lobby")
+					lobbyTravelValue.Value = false -- Clear the value after use
 				else
-					rep.Teleport:InvokeServer("Transitioning_Map")
+					-- Check if this is a friend teleport
+					local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
+					if friendTravelValue and friendTravelValue.Value ~= "" then
+						rep.Teleport:InvokeServer("Transitioning_Friend", friendTravelValue.Value)
+						print("[Friend Teleport] Initiating teleport to " .. friendTravelValue.Value)
+						friendTravelValue.Value = "" -- Clear the value after use
+					else
+						rep.Teleport:InvokeServer("Transitioning_Map")
+					end
 				end
 			else
 				rep.Teleport:InvokeServer("Cancel")
 				local friendTravelValue = tpFrame:FindFirstChild("FriendTravel")
 				if friendTravelValue then
 					friendTravelValue.Value = "" -- Clear friend travel on cancel
+				end
+				local lobbyTravelValue = tpFrame:FindFirstChild("LobbyTravel")
+				if lobbyTravelValue then
+					lobbyTravelValue.Value = false -- Clear lobby travel on cancel
 				end
 			end
 			tpFrame.Ready.Value = false
@@ -2986,23 +2997,24 @@ function ChangeBodyColor()
 end
 
 function SetupGameButtons()
-	local startButtons = {customize.Button, gameFrame.ToggleFrame.Button, 
-		customizeFrame.BioReady.Button, customizeFrame.NameReady.Button, customizeFrame.Tools.Button, 
-		customizeFrame.Character.Button, customizeFrame.Play.Button, animFrame.ToggleFrame.Button, 
-		gameFrame.DiceFrame.Button, plrFrame.ToggleFrame.Button, gameFrame.MetaFrame.Button, gameFrame.RadioFrame.Button, 
+	local startButtons = {customize.Button, gameFrame.ToggleFrame.Button,
+		customizeFrame.BioReady.Button, customizeFrame.NameReady.Button, customizeFrame.Tools.Button,
+		customizeFrame.Character.Button, customizeFrame.Play.Button, animFrame.ToggleFrame.Button,
+		gameFrame.DiceFrame.Button, plrFrame.ToggleFrame.Button, gameFrame.MetaFrame.Button, gameFrame.RadioFrame.Button,
 		gameFrame.HeadwearFrame.Button, critFrame.Confirm.Button, currencyFrame.None.Button, currencyFrame.Low.Button,
-		currencyFrame.Medium.Button, currencyFrame.High.Button, tradeFrame.Confirm.Button, tradeFrame.Deny.Button, 
-		shopFrame.PurchaseButton.Button, customizeFrame.Shop.Button, mobileFrame.CrouchButton.Button, 
+		currencyFrame.Medium.Button, currencyFrame.High.Button, tradeFrame.Confirm.Button, tradeFrame.Deny.Button,
+		shopFrame.PurchaseButton.Button, customizeFrame.Shop.Button, mobileFrame.CrouchButton.Button,
 		mobileFrame.SprintButton.Button, mobileFrame.ProneButton.Button, propFrame.MobilePropFrame.MovementButton.Button,
-		mobileFrame.ChamberButton.Button, mobileFrame.ReloadButton.Button, mobileFrame.RelaxButton.Button, 
+		mobileFrame.ChamberButton.Button, mobileFrame.ReloadButton.Button, mobileFrame.RelaxButton.Button,
 		propFrame.ModeButton.Button, propFrame.SaveClearButton.Button, propFrame.MobilePropFrame.CameraButton.Button,
-		vehicleFrame.DeleteVehicleButton.Button, mobileFrame.UseToolButton.Button, customizeFrame.RotateLeft.Button, 
+		vehicleFrame.DeleteVehicleButton.Button, mobileFrame.UseToolButton.Button, customizeFrame.RotateLeft.Button,
 		customizeFrame.RotateRight.Button, mobileFrame.zFunctionButton.Button, mobileFrame.tFunctionButton.Button,
-		settingFrame.Exit.Button, settingFrame.RainSplashButton.Button, settingFrame.BulletTrailButton.Button, 
-		gameFrame.SettingsFrame.Button, currencyFrame.Extreme.Button, propFrame.TuningFrame.ResetRotationButton.Button, 
+		settingFrame.Exit.Button, settingFrame.RainSplashButton.Button, settingFrame.BulletTrailButton.Button,
+		gameFrame.SettingsFrame.Button, currencyFrame.Extreme.Button, propFrame.TuningFrame.ResetRotationButton.Button,
 		propFrame.TuningFrame.ResetTranslationButton.Button, GUI.ClearPropsFrame.Confirm.Button,
-		GUI.ClearPropsFrame.Deny.Button, GUI.ClearOccludedFrame.Confirm.Button,
+		GUI.ClearOccludedFrame.Confirm.Button,
 		GUI.ClearOccludedFrame.Deny.Button, customizeFrame.NameClear.Button, customizeFrame.BioClear.Button,
+		gameFrame.SpawnFrame.Button,
 		txtFrame.ToggleTextScale.Button, txtFrame.ToggleTextStroke.Button, txtFrame.ConfirmTextBox.Button,
 		txtFrame.ConfirmRGB.Button, txtFrame.ConfirmTextSize.Button, txtFrame.ClearTextBox.Button, txtFrame.Exit.Button,
 		txtFrame.TextXAlignLeft.Button, txtFrame.TextXAlignCenter.Button, txtFrame.TextXAlignRight.Button, 
@@ -3861,6 +3873,21 @@ function InitializeButton(v)
 						end
 					end
 					rep.RollD20:FireServer(dicePart)
+				elseif v.Parent.Name == "SpawnFrame" then
+					-- Trigger teleport UI to teleport to lobby
+					if not tpFrame.Ready.Value then
+						tpFrame.Ready.Value = true
+						tpFrame.Label.Text = "Travel to Lobby?"
+						-- Create a flag to indicate this is a lobby teleport
+						local lobbyTravel = tpFrame:FindFirstChild("LobbyTravel")
+						if not lobbyTravel then
+							lobbyTravel = Instance.new("BoolValue")
+							lobbyTravel.Name = "LobbyTravel"
+							lobbyTravel.Parent = tpFrame
+						end
+						lobbyTravel.Value = true
+						tpFrame:TweenPosition(UDim2.new(0.7, 0, 0.7, 0), "In", "Sine", 0)
+					end
 				elseif v.Parent.Name == "OOCFrame" then
 					local onValue = v.Parent.On
 					onValue.Value = not onValue.Value

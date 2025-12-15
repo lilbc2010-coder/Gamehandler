@@ -2816,7 +2816,14 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 			local location = teleportingIndex[plr.Name]
 			if location then
 				if typeof(location) == "string" then
-					if teleporterIndex[location] then
+					if location == "Lobby" then
+						-- Teleport to a random spawn location
+						local spawnLocation = work:FindFirstChild("SpawnLocation"..tostring(math.random(1, 3)))
+						if spawnLocation then
+							char:SetPrimaryPartCFrame(spawnLocation.CFrame * CFrame.new(math.random(-5, 5), 4, math.random(-5, 5)))
+							plrStatus[plr.Name] = "Playing"
+						end
+					elseif teleporterIndex[location] then
 						local x, z = teleporterIndex[location][2].x, teleporterIndex[location][2].y
 						char:SetPrimaryPartCFrame(CFrame.new(teleporterIndex[location][1]) + Vector3.new(math.random(-x,x), 3, math.random(-z,z)))
 						plrStatus[plr.Name] = "Playing"
@@ -2915,6 +2922,9 @@ function rep.Teleport.OnServerInvoke(plr, mode, setting)
 				print("[Friend Teleport] ERROR: Invalid setting format (missing separator)")
 				teleportingIndex[plr.Name] = nil
 			end
+		elseif category == "Lobby" then
+			-- Lobby teleport - select a random spawn location and store it as "Lobby" for lookup
+			teleportingIndex[plr.Name] = "Lobby"
 		elseif category ~= "Map" then
 			teleportingIndex[plr.Name] = setting
 		else

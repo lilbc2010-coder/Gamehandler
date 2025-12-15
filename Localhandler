@@ -6823,6 +6823,13 @@ function NonFirstEntryProcesses(t)
 				rep.Teleport:InvokeServer("Teleporting")
 				tsFrame.TransitionPhase.Value = "Out"
 				if plrState == "Playing" and cam.CameraType == Enum.CameraType.Scriptable then
+					-- Reset player rotation when exiting customization
+					if char.PrimaryPart and customizationDrag.CharacterRotation ~= 0 then
+						char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, -customizationDrag.CharacterRotation, 0))
+					end
+					customizationDrag.CharacterRotation = 0
+					customizationDrag.Active = false
+					customizationDrag.LastMousePos = nil
 					customizationRoom:Destroy()
 					customizationRoom = nil
 					cam.CameraType = Enum.CameraType.Custom
@@ -6845,17 +6852,21 @@ function NonFirstEntryProcesses(t)
 
 			-- Handle click-drag to rotate player model (horizontal only)
 			if customizationDrag.Active and customizationDrag.LastMousePos and char.PrimaryPart then
-				local currentMousePos = Vector2.new(mouse.X, mouse.Y)
-				local delta = currentMousePos - customizationDrag.LastMousePos
+				-- Don't rotate if hovering over UI
+				local mouseOverUI = plr.PlayerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y)
+				if #mouseOverUI == 0 then
+					local currentMousePos = Vector2.new(mouse.X, mouse.Y)
+					local delta = currentMousePos - customizationDrag.LastMousePos
 
-				-- Update rotation based on horizontal drag only
-				local rotationDelta = delta.X * 0.01
-				customizationDrag.CharacterRotation = customizationDrag.CharacterRotation + rotationDelta
+					-- Update rotation based on horizontal drag only
+					local rotationDelta = delta.X * 0.01
+					customizationDrag.CharacterRotation = customizationDrag.CharacterRotation + rotationDelta
 
-				-- Apply rotation to character
-				char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, rotationDelta, 0))
+					-- Apply rotation to character
+					char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, rotationDelta, 0))
 
-				customizationDrag.LastMousePos = currentMousePos
+					customizationDrag.LastMousePos = currentMousePos
+				end
 			end
 
 			-- Camera animation (subtle noise-based movement)

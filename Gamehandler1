@@ -3235,13 +3235,18 @@ function rep.SaveLoadPropsChar.OnServerInvoke(plr, mode, input1, input2)
 				LoadItem(plr, "RemoveAccessory", v)
 			end
 			for i,v in pairs(loadout["Accessories"]) do
-				LoadItem(plr, "AddAccessory", string.sub(i, 3, string.len(i)))
-				local acc = gameData[plr.Name]["Server"]["Accessories"]
-				if v["Texture"] then
-					LoadItem(plr, "AccessoryChange_SetId", acc[i]["Object"], v["Texture"])
-				end
-				if v["r"] then
-					LoadItem(plr, "AccessoryChange_SetColor", acc[i]["Object"], Vector3.new(v["r"], v["g"], v["b"]))
+				-- Extract accessory ID (handles both "id123" and "id123_1" format)
+				local accessoryId = string.match(i, "id(%d+)")
+				if accessoryId then
+					local newAccessory = LoadItem(plr, "AddAccessory", tonumber(accessoryId))
+					if newAccessory then
+						if v["Texture"] then
+							LoadItem(plr, "AccessoryChange_SetId", newAccessory, v["Texture"])
+						end
+						if v["r"] then
+							LoadItem(plr, "AccessoryChange_SetColor", newAccessory, Vector3.new(v["r"], v["g"], v["b"]))
+						end
+					end
 				end
 			end
 			local preset = true

@@ -60,7 +60,7 @@ local propOriginalPositions = {}
 local currentFloorMaterial = mat.Plastic
 local notifierCount = 0
 local customizationRoom
-local customizationDrag = {Active = false, LastMousePos = nil, RotationX = 0, RotationY = 0}
+local customizationDrag = {Active = false, LastMousePos = nil, CharacterRotation = 0}
 local dragProp = {}
 local gameFrame = GUI.GameFrame
 local toolboxFrame = GUI.ToolboxFrame
@@ -3757,9 +3757,8 @@ function InitializeButton(v)
 					customizationRoom:SetPrimaryPartCFrame(CFrame.new(math.random(-250, 250), -150, math.random(50, 350)) *
 						CFrame.Angles(math.rad(-90), 0, 0))
 					customizationRoom.CamPart.Origin.Value = customizationRoom.CamPart.CFrame
-					-- Reset customization drag rotation
-					customizationDrag.RotationX = 0
-					customizationDrag.RotationY = 0
+					-- Reset customization drag
+					customizationDrag.CharacterRotation = 0
 					customizationDrag.Active = false
 					customizationDrag.LastMousePos = nil
 					customizationRoom.Parent = work
@@ -6770,24 +6769,25 @@ function NonFirstEntryProcesses(t)
 				cam.FieldOfView = 40
 			end
 
-			-- Handle click-drag camera rotation
-			if customizationDrag.Active and customizationDrag.LastMousePos then
+			-- Handle click-drag to rotate player model (horizontal only)
+			if customizationDrag.Active and customizationDrag.LastMousePos and char.PrimaryPart then
 				local currentMousePos = Vector2.new(mouse.X, mouse.Y)
 				local delta = currentMousePos - customizationDrag.LastMousePos
 
-				-- Update rotation based on drag (inverted Y for natural feel)
-				customizationDrag.RotationY = customizationDrag.RotationY + delta.X * 0.005
-				customizationDrag.RotationX = customizationDrag.RotationX - delta.Y * 0.005
+				-- Update rotation based on horizontal drag only
+				local rotationDelta = delta.X * 0.01
+				customizationDrag.CharacterRotation = customizationDrag.CharacterRotation + rotationDelta
 
-				-- Clamp vertical rotation to prevent flipping
-				customizationDrag.RotationX = math.clamp(customizationDrag.RotationX, -math.pi/3, math.pi/3)
+				-- Apply rotation to character
+				char:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.Angles(0, rotationDelta, 0))
 
 				customizationDrag.LastMousePos = currentMousePos
 			end
 
-			-- Apply rotation to camera (rotation persists after drag ends)
-			local origin = customizationRoom.CamPart.Origin.Value
-			cam.CFrame = origin * CFrame.Angles(customizationDrag.RotationX, customizationDrag.RotationY, 0)
+			-- Camera animation (subtle noise-based movement)
+			local origin, c = customizationRoom.CamPart.Origin.Value, customizationRoom.CamPart.cValue
+			c.Value = c.Value + 0.01
+			cam.CFrame = origin * CFrame.Angles(math.rad(math.noise(c.Value, 0.014, 1.718)), math.rad(math.noise(0.197, c.Value, 1.718)), 0)
 		end
 	end
 

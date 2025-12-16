@@ -1959,14 +1959,36 @@ function LoadItem(plr, interaction, input1, input2, input3)
 				end
 			end
 		elseif interaction == "NameChange" then
-			local newName = Chat:FilterStringAsync(input1, plr, plr)
+			local success, result = pcall(function()
+				return Chat:FilterStringAsync(input1, plr.UserId, plr)
+			end)
+			local newName = input1
+			if success and result then
+				local filterSuccess, filteredText = pcall(function()
+					return result:GetNonChatStringForBroadcastAsync()
+				end)
+				if filterSuccess and filteredText then
+					newName = filteredText
+				end
+			end
 			local falseHead = FindFalseHumanoid(char)
 			falseHead.Name = newName
 			rep.CharacterBios:FindFirstChild(plr.Name).RPName.Value = newName
 			gameData[plr.Name]["Server"]["RPName"] = newName
 			return newName
 		elseif interaction == "BioChange" then
-			local newBio = Chat:FilterStringAsync(input1, plr, plr)
+			local success, result = pcall(function()
+				return Chat:FilterStringAsync(input1, plr.UserId, plr)
+			end)
+			local newBio = input1
+			if success and result then
+				local filterSuccess, filteredText = pcall(function()
+					return result:GetNonChatStringForBroadcastAsync()
+				end)
+				if filterSuccess and filteredText then
+					newBio = filteredText
+				end
+			end
 			rep.CharacterBios:FindFirstChild(plr.Name).Value = newBio
 			gameData[plr.Name]["Server"]["Bio"] = newBio
 			return newBio
@@ -3011,7 +3033,18 @@ end
 function rep.SignUpdate.OnServerInvoke(plr, sign, text, font, color, stroke, scale, textSize, xPos, yPos)
 	local owner = sign.Parent.Parent.Parent.Owner.Value
 	if owner == plr.Name then
-		local filteredText = Chat:FilterStringAsync(text, plr, plr)
+		local success, result = pcall(function()
+			return Chat:FilterStringAsync(text, plr.UserId, plr)
+		end)
+		local filteredText = text
+		if success and result then
+			local filterSuccess, filtered = pcall(function()
+				return result:GetNonChatStringForBroadcastAsync()
+			end)
+			if filterSuccess and filtered then
+				filteredText = filtered
+			end
+		end
 		sign.Text = filteredText
 		sign.Font = font
 		sign.TextColor3 = color

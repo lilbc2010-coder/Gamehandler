@@ -1310,8 +1310,11 @@ function ClickAction()
 end
 
 function CrouchAction()
-	if not (equippedTool["Toggle"] == "Equipping" or equippedTool["Toggle"] == "Unequipping" or 
+	if not (equippedTool["Toggle"] == "Equipping" or equippedTool["Toggle"] == "Unequipping" or
 		equippedTool["Recovering"] or plrState == "Customizing" or mKs["LeftShift"] or humanStates["fall"]) then
+		if humanState ~= "Humanoid" then
+			return
+		end
 		if equippedTool["Toggle"] == "Equipped" and FindToolSetting("Setting_crouchNull") then
 			return
 		end
@@ -1320,8 +1323,11 @@ function CrouchAction()
 end
 
 function ProneAction()
-	if not (equippedTool["Toggle"] == "Equipping" or equippedTool["Toggle"] == "Unequipping" or 
+	if not (equippedTool["Toggle"] == "Equipping" or equippedTool["Toggle"] == "Unequipping" or
 		equippedTool["Recovering"] or plrState == "Customizing" or mKs["LeftShift"] or humanStates["fall"]) then
+		if humanState ~= "Humanoid" then
+			return
+		end
 		if equippedTool["Toggle"] == "Equipped" and FindToolSetting("Setting_proneNull") then
 			return
 		end

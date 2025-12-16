@@ -81,6 +81,7 @@ local toolFrame = GUI.ToolFrame
 local mobileFrame = GUI.MobileFrame
 local settingFrame = GUI.SettingsFrame
 local currencyFrame = GUI.CurrencyFrame
+currencyFrame.Visible = false
 local codesFrame = GUI.CodesFrame
 local shopFrame = GUI.ShopFrame
 local tradeFrame = GUI.TradeFrame
@@ -4413,20 +4414,25 @@ function InitializeButton(v)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Shop" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Tools" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Data" then
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						currencyFrame.Visible = false
 					else
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Tools"
+						currencyFrame.Visible = false
 					end
 				elseif v.Parent.Name == "Shop" then
 					local mode = customizeFrame.Mode
@@ -4434,20 +4440,25 @@ function InitializeButton(v)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Shop"
+						currencyFrame.Visible = true
 					elseif mode.Value == "Character" then
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Shop"
+						currencyFrame.Visible = true
 					elseif mode.Value == "Shop" then
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Data" then
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Shop"
+						currencyFrame.Visible = true
 					else
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Shop"
+						currencyFrame.Visible = true
 					end
 				elseif v.Parent.Name == "Character" then
 					local mode = customizeFrame.Mode
@@ -4455,20 +4466,25 @@ function InitializeButton(v)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Shop" then
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Character" then
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Data" then
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						currencyFrame.Visible = false
 					else
 						charFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Character"
+						currencyFrame.Visible = false
 					end
 				elseif v.Parent.Name == "Data" then
 					local mode = customizeFrame.Mode
@@ -4476,20 +4492,25 @@ function InitializeButton(v)
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						toolFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Data"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Shop" then
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						shopFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Data"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Character" then
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						charFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Data"
+						currencyFrame.Visible = false
 					elseif mode.Value == "Data" then
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, -1, 0), "Out", "Sine", 0.2)
 						mode.Value = "None"
+						currencyFrame.Visible = false
 					else
 						dataFrame:TweenPosition(UDim2.new(0.18, 0, 0.1, 0), "Out", "Sine", 0.2)
 						mode.Value = "Data"
+						currencyFrame.Visible = false
 					end
 				elseif v.Parent.Name == "Play" then
 					if tsFrame.TransitionPhase.Value == "None" then

@@ -4058,8 +4058,9 @@ function WorldCycle()
 						if plr then
 							-- Save data outside physics loop
 							spawn(function()
+								gameData[plrName]["Account"]["Currency"] = gameData[plrName]["Account"]["Currency"] + 85
 								SaveData(plr.UserId, gameData[plrName]["Account"], DataStore)
-								rep.ServerNotification:FireClient(plr, "You are now level "..afterLevel.."!", afterLevel)
+								rep.ServerNotification:FireClient(plr, "You are now level "..afterLevel.."! You have received 85 Scrap Parts!", afterLevel)
 							end)
 						elseif gameData[plrName] then
 							gameData[plrName] = nil

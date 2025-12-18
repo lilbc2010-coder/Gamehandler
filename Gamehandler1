@@ -2258,74 +2258,6 @@ local vehicleLightSettings = {
 }
 
 local seatConnections = {}
-
--- Smart vehicle spawning with raycast positioning and obstacle detection
-function FindVehicleSpawnPosition(char, vehicle)
-	local charPos = char.PrimaryPart.Position
-	local charCF = char.PrimaryPart.CFrame
-
-	-- Try multiple spawn positions in front and around the player
-	local spawnOffsets = {
-		CFrame.new(0, 3, -20),  -- Front
-		CFrame.new(-15, 3, -15), -- Front-left
-		CFrame.new(15, 3, -15),  -- Front-right
-		CFrame.new(0, 3, -30),   -- Further front
-	}
-
-	-- Get vehicle size for clearance checks
-	local vehicleSize = vehicle:GetExtentsSize()
-	local vehicleHeight = vehicleSize.Y
-
-	for _, offset in ipairs(spawnOffsets) do
-		local testPosition = charCF * offset
-		local testPos = testPosition.Position
-
-		-- Raycast downward to find ground
-		local rayOrigin = testPos + Vector3.new(0, 50, 0)
-		local rayDirection = Vector3.new(0, -200, 0)
-		local raycastParams = RaycastParams.new()
-		raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-		raycastParams.FilterDescendantsInstances = {char, vehicle}
-
-		local rayResult = work:Raycast(rayOrigin, rayDirection, raycastParams)
-
-		if rayResult then
-			local groundPos = rayResult.Position
-			local groundNormal = rayResult.Normal
-
-			-- Check if ground is relatively flat (suitable for vehicle)
-			local flatness = groundNormal:Dot(Vector3.new(0, 1, 0))
-			if flatness > 0.7 then -- Ground is mostly horizontal
-				-- Position vehicle slightly above ground
-				local spawnPos = groundPos + Vector3.new(0, vehicleHeight / 2 + 1, 0)
-
-				-- Check for obstacles at spawn position using Region3
-				local region = Region3.new(
-					spawnPos - vehicleSize / 2,
-					spawnPos + vehicleSize / 2
-				):ExpandToGrid(4)
-
-				local partsInRegion = work:FindPartsInRegion3WithWhiteList(
-					region,
-					{work:FindFirstChild("Builds")},
-					100
-				)
-
-				-- If relatively clear (few obstacles), use this position
-				if #partsInRegion < 5 then
-					-- Orient vehicle to face same direction as character
-					local lookVector = charCF.LookVector
-					lookVector = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
-					return CFrame.new(spawnPos, spawnPos + lookVector)
-				end
-			end
-		end
-	end
-
-	-- Fallback: use original simple offset if no good position found
-	return charCF * CFrame.new(0, 10, -20)
-end
-
 function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 	local char = plr.Character
 	if char and char.Parent then
@@ -2365,7 +2297,6 @@ function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 				if v:FindFirstChild("Chassis") then
 					table.remove(gameData[plr.Name]["Server"]["PropsPlaced"], i)
 					v:Destroy()
-					-- Clean up old vehicle seat connection to prevent memory leak
 					if seatConnections[plr.Name] then
 						seatConnections[plr.Name][2]:Disconnect()
 						seatConnections[plr.Name] = nil
@@ -2425,107 +2356,6 @@ function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 			Scan(vehicle.BodyKit)
 			local seat = vehicle.Chassis.VehicleSeat
 			local chassis, accel = vehicle.Chassis, seat.acceleration.Value
-
-			--[[
-			=================================================================
-			VEHICLE PHYSICS CONTROL - Current Implementation
-			=================================================================
-			Currently: All 4 motors (A, AA, B, BB) set to same MotorMaxTorque
-			This provides basic movement but limited realism for roleplay.
-
-			=================================================================
-			IMPROVED PHYSICS CONTROL - Recommended for Roleplay Enhancement
-			=================================================================
-
-			For a text-based roleplay game, improved physics adds immersion:
-
-			1. DIFFERENTIAL DRIVE SYSTEM
-			   - Front motors (A, AA): Higher torque for steering
-			   - Rear motors (B, BB): Balanced for stability
-			   - Benefits: More realistic turning, better hill climbing
-			   - Code example:
-			     chassis.A.Motor.MotorMaxTorque = accel * 1.2  -- Front wheels
-			     chassis.B.Motor.MotorMaxTorque = accel * 0.8  -- Rear wheels
-
-			2. DYNAMIC SPEED ADJUSTMENT
-			   - Adjust motor torque based on terrain slope
-			   - Lower speed on steep inclines (realistic struggle uphill)
-			   - Benefits: Vehicles feel more grounded, encourages RP scenarios
-			   - Code example:
-			     local slope = chassis.CFrame.UpVector:Dot(Vector3.new(0,1,0))
-			     local slopeMultiplier = math.clamp(slope, 0.5, 1.5)
-
-			3. WEIGHT DISTRIBUTION
-			   - Account for passengers (if multi-seat added)
-			   - Heavier vehicles = slower acceleration, better stability
-			   - Benefits: Different vehicle types feel unique in RP
-			   - Code example:
-			     local vehicleMass = vehicle:GetMass()
-			     local adjustedAccel = accel / (vehicleMass / 100)
-
-			4. BRAKING SYSTEM
-			   - Currently no dedicated brake (only stops when exiting)
-			   - Add brake activation: when Throttle = 0 and moving
-			   - Benefits: Players can stop for RP conversations, parking
-			   - Code example:
-			     if seat.Throttle == 0 and chassis.AssemblyLinearVelocity.Magnitude > 1 then
-			         -- Apply brake friction
-			         chassis.A.Motor.MotorMaxTorque = accel * 2  -- Brake resistance
-			     end
-
-			5. TRACTION CONTROL
-			   - Different surfaces affect grip (ice, sand, pavement)
-			   - Check material under wheels via raycast
-			   - Benefits: Adds realism to different map zones
-			   - Code example:
-			     local surfaceMaterial = rayResult.Material
-			     if surfaceMaterial == Enum.Material.Ice then
-			         accel = accel * 0.4  -- Reduced traction on ice
-			     end
-
-			6. SUSPENSION SIMULATION
-			   - Vertical CFrame adjustment based on terrain roughness
-			   - Gentle bounce effect for realism without disruption
-			   - Benefits: Visual feedback, feels more alive during RP
-			   - Code example:
-			     local verticalVelocity = chassis.AssemblyLinearVelocity.Y
-			     -- Apply damping force to smooth out bumps
-
-			7. SPEED ZONES FOR ROLEPLAY
-			   - Enforce speed limits in certain areas (town centers)
-			   - MaxSpeed reduction in designated zones
-			   - Benefits: Encourages proper RP behavior, safety in populated areas
-			   - Code example:
-			     if inSafeZone then
-			         seat.MaxSpeed = 20  -- Slow speed in town
-			     else
-			         seat.MaxSpeed = seat.defaultSpeed.Value
-			     end
-
-			8. VEHICLE CONDITION/DAMAGE
-			   - Track "health" that affects performance over time
-			   - Damaged vehicles have reduced torque
-			   - Benefits: Maintenance RP, mechanic roles, consequences
-			   - Code example:
-			     local condition = vehicle:GetAttribute("Condition") or 100
-			     local conditionMultiplier = condition / 100
-			     accel = accel * conditionMultiplier
-
-			=================================================================
-			IMPLEMENTATION PRIORITY (for roleplay focus):
-			=================================================================
-			HIGH:   #4 Braking, #7 Speed Zones (direct RP benefit)
-			MEDIUM: #1 Differential Drive, #3 Weight Distribution (realism)
-			LOW:    #2 Terrain Slope, #5 Traction (nice-to-have immersion)
-			FUTURE: #6 Suspension, #8 Damage System (advanced features)
-
-			All improvements maintain the text-RP focus by adding realism
-			without requiring complex player interaction - vehicles simply
-			"feel right" during roleplay scenarios.
-			=================================================================
-			]]--
-
-			-- Current basic physics setup
 			chassis.A.Motor.MotorMaxTorque = accel
 			chassis.AA.Motor.MotorMaxTorque = accel
 			chassis.B.Motor.MotorMaxTorque = accel
@@ -2567,9 +2397,7 @@ function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 					end
 				end
 			end)}
-			-- Use smart spawning to find optimal vehicle position
-			local spawnCFrame = FindVehicleSpawnPosition(char, vehicle)
-			vehicle:SetPrimaryPartCFrame(spawnCFrame)
+			vehicle:SetPrimaryPartCFrame(char.PrimaryPart.CFrame * CFrame.new(0, 10, -20))
 			table.insert(gameData[plr.Name]["Server"]["PropsPlaced"], vehicle)
 			vehicle.Parent = game.Workspace
 			return true

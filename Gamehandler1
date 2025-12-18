@@ -877,43 +877,47 @@ game.Players.PlayerRemoving:Connect(function(plr)
 end)
 -- check this out
 rep.MouseInteraction.OnServerEvent:Connect(function(plr, part)
-	if part.Parent.Type.Value == "Door" or part.Parent.Type.Value == "ReverseDoor" then
-		InteractDoor(part.Parent, part.Parent.Type.Value)
-	elseif part.Parent.Type.Value == "Light" then
+	local interactType = part.Parent.Type.Value
+	if interactType == "Door" or interactType == "ReverseDoor" then
+		InteractDoor(part.Parent, interactType)
+	elseif interactType == "VehicleDoor" or interactType == "ReverseVehicleDoor" then
+		-- Vehicle doors use the same system but are attached to vehicles
+		InteractDoor(part.Parent, interactType == "ReverseVehicleDoor" and "ReverseDoor" or "Door")
+	elseif interactType == "Light" then
 		InteractLight(part)
-	elseif part.Parent.Type.Value == "Candle" then
+	elseif interactType == "Candle" then
 		InteractCandle(part)
-	elseif part.Parent.Type.Value == "Fire" then
+	elseif interactType == "Fire" then
 		InteractFire(part)
-	elseif part.Parent.Type.Value == "LightRoom" then
+	elseif interactType == "LightRoom" then
 		InteractLightRoom(part)
-	elseif part.Parent.Type.Value == "Chair" then
+	elseif interactType == "Chair" then
 		InteractChair(part, plr.Character)
-	elseif part.Parent.Type.Value == "Bed" then
+	elseif interactType == "Bed" then
 		InteractBed(part, plr.Character)
-	elseif part.Parent.Type.Value == "Elevator" then
+	elseif interactType == "Elevator" then
 		local lift = part.Parent
 		if part.Parent:findFirstChild("Elevator") then
 			lift = part.Parent.Elevator
 		end
 		InteractElevator(part, lift)
-	elseif part.Parent.Type.Value == "Stove" then
+	elseif interactType == "Stove" then
 		InteractStove(part)
-	elseif part.Parent.Type.Value == "Drawer" then
+	elseif interactType == "Drawer" or interactType == "VehicleDrawer" then
 		InteractDrawer(part)
-	elseif part.Parent.Type.Value == "Computer" then
+	elseif interactType == "Computer" then
 		InteractComputer(part)
-	elseif part.Parent.Type.Value == "Sink" then
+	elseif interactType == "Sink" then
 		InteractSink(part)
-	elseif part.Parent.Type.Value == "Toilet" then
+	elseif interactType == "Toilet" then
 		InteractToilet(part)
-	elseif part.Parent.Type.Value == "Shower" then
+	elseif interactType == "Shower" then
 		InteractShower(part)
-	elseif part.Parent.Type.Value == "ElectricDoor" then
+	elseif interactType == "ElectricDoor" then
 		InteractElectricDoor(part)
-	elseif part.Parent.Type.Value == "Drawgate" then
+	elseif interactType == "Drawgate" then
 		InteractDrawgate(part)
-	elseif part.Parent.Type.Value == "Radio" then
+	elseif interactType == "Radio" then
 		InteractRadio(part)
 	end
 end)
@@ -2320,15 +2324,39 @@ function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 						w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
 						w.Parent = w.Part1
 					end
+				elseif v.Name == "Interactables" then
+					-- Handle vehicle interactables (doors, etc.)
+					for _,interactable in pairs(v:GetChildren()) do
+						if interactable:IsA("Model") then
+							-- Weld all parts of the interactable to the vehicle
+							for _,part in pairs(interactable:GetDescendants()) do
+								if (part:IsA("BasePart") or part:IsA("UnionOperation")) and part ~= interactable.PrimaryPart then
+									local w = Instance.new("Weld")
+									w.Part0 = part
+									w.Part1 = interactable.PrimaryPart
+									w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+									w.Parent = interactable.PrimaryPart
+								end
+							end
+							-- Weld the interactable's primary part to the vehicle
+							if interactable.PrimaryPart then
+								local w = Instance.new("Weld")
+								w.Part0 = interactable.PrimaryPart
+								w.Part1 = vehicle.Chassis.PrimaryWeld
+								w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
+								w.Parent = vehicle.Chassis.PrimaryWeld
+							end
+						end
+					end
 				elseif v.Name == "BodyKit" then
 					for _,b in pairs(v:GetChildren()) do
 						if b:IsA("Model") then
 							for _,n in pairs(b:GetChildren()) do
 								if n:IsA("BasePart") or n:IsA("UnionOperation") then
-									local w = Instance.new("Weld") 
+									local w = Instance.new("Weld")
 									w.Part0 = n
 									w.Part1 = vehicle.Chassis.PrimaryWeld
-									w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame) 
+									w.C0 = w.Part0.CFrame:toObjectSpace(w.Part1.CFrame)
 									w.Parent = w.Part1
 									if b.Name == "Color" then
 										n.BrickColor = vehicleColor
@@ -2350,6 +2378,10 @@ function rep.VehicleUpdate.OnServerInvoke(plr, item1, item2, item3)
 				end
 			end
 			Scan(vehicle.BodyKit)
+			-- Scan interactables if they exist
+			if vehicle:FindFirstChild("Interactables") then
+				Scan(vehicle.Interactables)
+			end
 			local seat = vehicle.Chassis.VehicleSeat
 			local chassis, accel = vehicle.Chassis, seat.acceleration.Value
 			chassis.A.Motor.MotorMaxTorque = accel
